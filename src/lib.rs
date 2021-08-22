@@ -409,7 +409,7 @@ impl fmt::Debug for NodeIdx {
 
 impl fmt::Display for NodeIdx {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "NodeIdx({})", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
