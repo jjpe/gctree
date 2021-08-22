@@ -1,9 +1,9 @@
 //! This module defines a low-level and cache-friendly tree
 //! datastructure that can be newtyped for higher-level trees.
 
-pub mod error;
+mod error;
 
-use crate::error::{TreeError, TreeResult};
+pub use crate::error::{TreeError, TreeResult};
 use deltoid::{Apply, Core, Delta, DeltaError, DeltaResult, FromDelta, IntoDelta};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
