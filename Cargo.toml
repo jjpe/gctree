@@ -3,6 +3,7 @@ name = "gctree"
 version = "0.1.0"
 edition = "2018"
 description = "A cache-friendly, garbage-collecting tree structure."
+license = "BSD"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
