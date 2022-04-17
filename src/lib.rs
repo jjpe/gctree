@@ -37,6 +37,16 @@ where
     }
 
     #[inline(always)]
+    pub fn root_ref(&self) -> TreeResult<&Node<D>> {
+        Ok(self.node_ref(NodeIdx::ROOT)?)
+    }
+
+    #[inline(always)]
+    pub fn root_mut(&mut self) -> TreeResult<&mut Node<D>> {
+        Ok(self.node_mut(NodeIdx::ROOT)?)
+    }
+
+    #[inline(always)]
     pub fn node_ref(&self, idx: NodeIdx) -> TreeResult<&Node<D>> {
         self.nodes
             .get(idx.0)
