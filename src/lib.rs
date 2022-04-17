@@ -194,6 +194,15 @@ where
     }
 }
 
+impl<D> std::ops::IndexMut<NodeIdx> for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq,
+{
+    fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
+        unsafe { self.nodes.get_unchecked_mut(idx.0) }
+    }
+}
+
 impl<D> fmt::Display for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq,
