@@ -402,6 +402,20 @@ impl<D> Node<D> {
     }
 }
 
+impl<D> std::ops::Deref for Node<D> {
+    type Target = D;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<D> std::ops::DerefMut for Node<D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
 impl<D: Debug> fmt::Debug for Node<D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut ds = f.debug_struct("Node");
