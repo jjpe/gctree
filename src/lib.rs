@@ -183,6 +183,17 @@ where
     }
 }
 
+impl<D> std::ops::Index<NodeIdx> for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq,
+{
+    type Output = Node<D>;
+
+    fn index(&self, idx: NodeIdx) -> &Self::Output {
+        unsafe { self.nodes.get_unchecked(idx.0) }
+    }
+}
+
 impl<D> fmt::Display for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq,
