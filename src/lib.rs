@@ -346,13 +346,29 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[rustfmt::skip]
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    serde_derive::Serialize,
+    serde_derive::Deserialize
+)]
 pub struct ArenaTreeDelta<D>(Option<ArenaTree<D>>)
 where
     D: Clone + Debug + Default + PartialEq + Core;
 
+#[rustfmt::skip]
 #[derive(
-    Clone, PartialEq, Eq, PartialOrd, Ord, Hash, deltoid_derive::Delta, Deserialize, Serialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    deltoid_derive::Delta,
+    Deserialize,
+    Serialize,
 )]
 pub struct Node<D> {
     idx: NodeIdx,
@@ -431,8 +447,18 @@ impl<D: Debug> fmt::Debug for Node<D> {
     }
 }
 
+#[rustfmt::skip]
 #[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, deltoid_derive::Delta, Deserialize, Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    deltoid_derive::Delta,
+    Deserialize,
+    Serialize,
 )]
 pub struct NodeIdx(pub(crate) usize);
 
