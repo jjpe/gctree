@@ -64,12 +64,11 @@ where
     where
         P: Into<Option<NodeIdx>>,
     {
-        let data = D::default();
         if let Some(cidx) = self.garbage.pop_front() {
-            self.node_mut(cidx)?.parent = parent.into();
-            self.node_mut(cidx)?.data = data;
-            if let Some(pidx) = self.node_ref(cidx)?.parent {
-                self.node_mut(pidx)?.add_child(cidx);
+            self[cidx].parent = parent.into();
+            self[cidx].data = D::default();
+            if let Some(pidx) = self[cidx].parent {
+                self[pidx].add_child(cidx)
             }
             Ok(cidx)
         } else {
@@ -79,29 +78,26 @@ where
                 idx: cidx,
                 parent,
                 children: vec![],
-                data,
+                data: D::default(),
             });
             if let Some(pidx) = parent {
-                self.node_mut(pidx)?.add_child(cidx);
+                self[pidx].add_child(cidx);
             }
             Ok(cidx)
         }
     }
 
+    #[rustfmt::skip]
     fn destroy_node(&mut self, idx: NodeIdx) -> TreeResult<()> {
-        let idx = self.node_ref(idx)?.idx;
-        if let Some(pidx) = self.node_ref(idx)?.parent {
+        if let Some(pidx) = self[idx].parent {
             // Filter out the NodeIdx from the parent's child indices
-            let mut parent = self.node_mut(pidx)?;
-            parent.children = parent
-                .children
-                .drain(..)
+            self[pidx].children = self[pidx].children.drain(..)
                 .filter(|&child_idx| child_idx != idx)
                 .collect();
         }
-        self.node_mut(idx)?.parent = None;
-        self.node_mut(idx)?.children = vec![];
-        self.node_mut(idx)?.data = D::default();
+        self[idx].parent = None;
+        self[idx].children = vec![];
+        self[idx].data = D::default();
         self.garbage.push_back(idx);
         Ok(())
     }
@@ -129,7 +125,7 @@ where
 
     pub fn remove_subtree(&mut self, start: NodeIdx) -> TreeResult<()> {
         for nidx in self.dfs(start)?.rev(/*from the leaves toward the root*/) {
-            debug_assert!(self.node_ref(nidx)?.children.is_empty());
+            debug_assert!(self[nidx].children.is_empty());
             self.destroy_node(nidx)?;
         }
         Ok(())
@@ -144,7 +140,7 @@ where
     ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx> + 't> {
         let mut ancestors = vec![];
         let mut current: NodeIdx = idx;
-        while let Some(pidx) = self.node_ref(current)?.parent {
+        while let Some(pidx) = self[current].parent {
             ancestors.push(pidx);
             current = pidx;
         }
@@ -156,7 +152,7 @@ where
         &'t self,
         idx: NodeIdx,
     ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx> + 't> {
-        Ok(self.node_ref(idx)?.children())
+        Ok(self[idx].children())
     }
 
     /// Return an iterator over the nodes, in DFS order,
@@ -166,22 +162,26 @@ where
         let mut stack: Vec<NodeIdx> = vec![start];
         while let Some(idx) = stack.pop() {
             output.push(idx);
-            stack.extend(self.node_ref(idx)?.children().rev());
+            stack.extend(self[idx].children().rev());
         }
         Ok(output.into_iter())
     }
 
+    #[rustfmt::skip]
     #[allow(unused)]
     /// Return an iterator, in BFS order, over the `NodeIdx`s
     /// of the nodes of the the subtree rooted in `start`.
-    pub fn bfs(&self, start: NodeIdx) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx>> {
+    pub fn bfs(
+        &self,
+        start: NodeIdx
+    ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx>> {
         type Layer = Vec<NodeIdx>;
         let start_layer: Layer = vec![start];
         let mut layers: Vec<Layer> = vec![start_layer];
         let mut current: Layer = vec![];
         while let Some(ref previous) = layers.last() {
             for &idx in previous.iter() {
-                current.extend(self.node_ref(idx)?.children());
+                current.extend(self[idx].children());
             }
             if current.is_empty() {
                 break;
@@ -222,14 +222,14 @@ where
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
         for node_idx in self.dfs(NodeIdx::ROOT).unwrap(/*TreeResult*/) {
-            let node: &Node<_> = self.node_ref(node_idx).unwrap(/*TreeResult*/);
             let num_ancestors: usize = self.ancestors_of(node_idx)
                 .unwrap(/*TreeResult*/)
                 .count();
             for _ in 0..num_ancestors {
                 write!(f, "| ")?; /* no newline */
             }
-            writeln!(f, "{} {:?}", node.idx, node.data)?;
+            let Node { idx, data, .. } = &self[node_idx];
+            writeln!(f, "{idx} {data:?}")?;
         }
         Ok(())
     }
@@ -594,7 +594,7 @@ mod tests {
             (node20, "node20"),
         ];
         for &(idx, data) in &tree_pairs {
-            *tree.node_mut(idx)?.data_mut() = data.to_string()
+            *tree[idx] = data.to_string();
         }
 
         let mut subtree: ArenaTree<String> = ArenaTree::new();
@@ -615,7 +615,7 @@ mod tests {
             (st_node20, "node20 (subtree)"),
         ];
         for &(idx, data) in &subtree_pairs {
-            *subtree.node_mut(idx)?.data_mut() = data.to_string()
+            *subtree[idx] = data.to_string()
         }
 
         tree.add_subtree(node20, &subtree)?;
@@ -652,7 +652,7 @@ mod tests {
             (e_st_node20, "node20 (subtree)"),
         ];
         for &(idx, data) in &expected_pairs {
-            *expected.node_mut(idx)?.data_mut() = data.to_string()
+            *expected[idx] = data.to_string()
         }
 
         assert_eq!(tree, expected, "{:#?} != {:#?}", tree, expected);
