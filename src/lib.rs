@@ -129,6 +129,34 @@ where
         Ok(())
     }
 
+    #[rustfmt::skip]
+    /// Make `self[subroot_idx]` a child node of `self[parent_idx]`
+    // /// If `parent_idx` is `None`,
+    pub fn move_subtree(
+        &mut self,
+        subroot_idx: NodeIdx,
+        // TODO: Add support for multiple root nodes in ArenaTree
+        //       before allowing `parent_idx` to be `None`:
+        // parent_idx: impl Into<Option<NodeIdx>>,
+        parent_idx: NodeIdx,
+    ) -> TreeResult<()> {
+        // Remove `subroot_idx` from the children of the old parent node
+        // of `self[subroot_idx]`, if that parent node exists:
+        if let Some(old_subroot_parent_idx) = self[subroot_idx].parent {
+            let children = &mut self[old_subroot_parent_idx].children;
+            *children = children.drain(..)
+                .filter(|&cidx| cidx != subroot_idx)
+                .collect();
+        }
+        // Update the parent idx of `self[subroot_idx]`:
+        self[subroot_idx].parent = parent_idx.into();
+        // If the parent node exists, push `subroot_idx`
+        // to `self[parent_idx].children`:
+        if let Some(parent_idx) = self[subroot_idx].parent {
+            self[parent_idx].add_child(subroot_idx);
+        }
+        Ok(())
+    }
     /// Return an iterator over the ancestors of `idx`, starting with
     /// the parent of `idx` and going toward the root of the tree.
     #[inline(always)]
@@ -694,6 +722,46 @@ mod tests {
         let node200 = NodeIdx(8);
         let ancestors: Vec<_> = data.tree.ancestors_of(node200)?.collect();
         assert_eq!(ancestors, data.ancestors_order);
+        Ok(())
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn move_subtree() -> TreeResult<()> {
+        let data = make_data()?;
+        let mut tree = data.tree.clone();
+
+        let (subroot_idx, parent_idx) = (NodeIdx(6), NodeIdx(1));
+        // Make `tree[subroot_idx]` a child of `tree[parent_idx]`,
+        // i.e. move the subtree rooted in `tree[subroot_idx]`:
+        tree.move_subtree(subroot_idx, parent_idx)?;
+        let mut expected = ArenaTree::<()>::new();
+        // The order in which the nodes are added is significant:
+        let root_idx = expected.new_node(None)?;
+        let _node1_idx = expected.new_node(root_idx)?;
+        let _node2_idx = expected.new_node(_node1_idx)?;
+        let _node3_idx = expected.new_node(_node1_idx)?;
+        let _node4_idx = expected.new_node(root_idx)?;
+        let _node5_idx = expected.new_node(_node4_idx)?;
+        let _node6_idx = expected.new_node(_node1_idx)?;
+        let _node7_idx = expected.new_node(_node6_idx)?;
+        let _node8_idx = expected.new_node(_node7_idx)?;
+        let _node9_idx = expected.new_node(_node6_idx)?;
+        assert_eq!(
+            tree, expected,
+            "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
+        );
+
+        let (subroot_idx, parent_idx) = (NodeIdx(6), NodeIdx(0));
+        // Make `tree[subroot_idx]` a child of its grandparent,
+        // i.e. move the subtree back:
+        tree.move_subtree(subroot_idx, parent_idx)?;
+        let expected = data.tree.clone();
+        assert_eq!(
+            tree, expected,
+            "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
+        );
+
         Ok(())
     }
 }
