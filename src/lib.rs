@@ -586,6 +586,7 @@ mod tests {
         subtree_dfs_order: Vec<NodeIdx>,
     }
 
+    #[rustfmt::skip]
     fn make_data() -> TreeResult<Data> {
         let mut tree: ArenaTree<_> = ArenaTree::new();
         let root: NodeIdx = tree.new_node(None)?;
@@ -603,13 +604,47 @@ mod tests {
             root,
             ancestors_order: vec![node20, node2, root],
             bfs_order: vec![
-                root, node0, node1, node2, node00, node01, node10, node20, node21, node200,
+                root,
+                node0,
+                node1,
+                node2,
+                node00,
+                node01,
+                node10,
+                node20,
+                node21,
+                node200,
             ],
             dfs_order: vec![
-                root, node0, node00, node01, node1, node10, node2, node20, node200, node21,
+                root,
+                node0,
+                node00,
+                node01,
+                node1,
+                node10,
+                node2,
+                node20,
+                node200,
+                node21,
             ],
-            subtree_bfs_order: vec![root, node1, node2, node10, node20, node21, node200],
-            subtree_dfs_order: vec![root, node1, node10, node2, node20, node200, node21],
+            subtree_bfs_order: vec![
+                root,
+                node1,
+                node2,
+                node10,
+                node20,
+                node21,
+                node200
+            ],
+            subtree_dfs_order: vec![
+                root,
+                node1,
+                node10,
+                node2,
+                node20,
+                node200,
+                node21
+            ],
         })
     }
 
