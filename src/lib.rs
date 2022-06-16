@@ -102,22 +102,20 @@ where
         Ok(())
     }
 
-    /// Append a `subtree` under the node in `self` @ `dst_node_idx`.
-    /// This means that the root of the `subtree` becomes a child of
-    /// the node in `self` @ `idx`.  Note that the `NodeIdx`s of any
-    /// and all nodes in `subtree` will *NOT* be valid in `self`.
+    /// Copy a `src` tree to `self`, making it a subtree of `self` in the process.
+    /// Specifically, `src[ROOT]` becomes a child node of `self[dst_node_idx]`.
+    /// Note that the `NodeIdx`s of the nodes in `src` will *NOT* be valid in `self`.
     pub fn add_subtree(&mut self, dst_node_idx: NodeIdx, src: &Self) -> TreeResult<()> {
         type SrcTreeIdx = Option<NodeIdx>;
         type DstTreeIdx = NodeIdx;
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
-        for src_node_idx in src.dfs(NodeIdx(0))? {
-            let src: &Node<_> = src.node_ref(src_node_idx)?;
-            let src_parent_idx = src.parent;
+        let dst = self;
+        for src_node_idx in src.dfs(NodeIdx::ROOT)? {
+            let src_parent_idx = src[src_node_idx].parent;
             let dst_parent_idx = map.get(&src_parent_idx).map(|&idx| idx);
-            let dst_node_idx = self.new_node(dst_parent_idx)?;
-            let dst: &mut Node<_> = self.node_mut(dst_node_idx)?;
-            dst.data = src.data.clone();
+            let dst_node_idx = dst.new_node(dst_parent_idx)?;
+            dst[dst_node_idx].data = src[src_node_idx].data.clone();
             map.insert(Some(src_node_idx), dst_node_idx);
         }
         Ok(())
