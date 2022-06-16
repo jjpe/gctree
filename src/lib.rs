@@ -319,16 +319,22 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<D> Core for ArenaTree<D>
 where
-    D: Clone + Debug + Default + PartialEq + for<'de> Deserialize<'de> + Serialize + Core,
+    D: Clone + Debug + Default + PartialEq
+        + for<'de> Deserialize<'de> + Serialize
+        + Core,
 {
     type Delta = ArenaTreeDelta<D>;
 }
 
+#[rustfmt::skip]
 impl<D> Apply for ArenaTree<D>
 where
-    D: Clone + Debug + Default + PartialEq + for<'de> Deserialize<'de> + Serialize + Apply,
+    D: Clone + Debug + Default + PartialEq
+        + for<'de> Deserialize<'de> + Serialize
+        + Apply,
 {
     fn apply(&self, delta: Self::Delta) -> DeltaResult<Self> {
         match delta.0 {
@@ -340,9 +346,12 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<D> Delta for ArenaTree<D>
 where
-    D: Clone + Debug + Default + PartialEq + for<'de> Deserialize<'de> + Serialize + Delta,
+    D: Clone + Debug + Default + PartialEq
+        + for<'de> Deserialize<'de> + Serialize
+        + Delta,
 {
     fn delta(&self, rhs: &Self) -> DeltaResult<Self::Delta> {
         Ok(ArenaTreeDelta(if self == rhs {
@@ -353,9 +362,12 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<D> FromDelta for ArenaTree<D>
 where
-    D: Clone + Debug + Default + PartialEq + for<'de> Deserialize<'de> + Serialize + FromDelta,
+    D: Clone + Debug + Default + PartialEq
+        + for<'de> Deserialize<'de> + Serialize
+        + FromDelta,
 {
     fn from_delta(delta: Self::Delta) -> DeltaResult<Self> {
         match delta.0 {
@@ -367,9 +379,12 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<D> IntoDelta for ArenaTree<D>
 where
-    D: Clone + Debug + Default + PartialEq + for<'de> Deserialize<'de> + Serialize + IntoDelta,
+    D: Clone + Debug + Default + PartialEq
+        + for<'de> Deserialize<'de> + Serialize
+        + IntoDelta,
 {
     fn into_delta(self) -> DeltaResult<Self::Delta> {
         Ok(ArenaTreeDelta(Some(self)))
