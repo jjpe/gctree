@@ -414,18 +414,25 @@ where
     Serialize,
 )]
 pub struct Node<D> {
-    idx: NodeIdx,
-    parent: Option<NodeIdx>,
-    children: Vec<NodeIdx>,
-    data: D,
+    pub idx: NodeIdx,
+    pub parent: Option<NodeIdx>,
+    pub children: Vec<NodeIdx>,
+    pub data: D,
 }
 
 impl<D> Node<D> {
+    #[inline(always)]
+    pub fn node_idx(&self) -> NodeIdx {
+        self.idx
+    }
+
+    #[deprecated]
     #[inline(always)]
     pub fn parent(&self) -> Option<NodeIdx> {
         self.parent
     }
 
+    #[deprecated]
     #[inline(always)]
     pub fn set_parent(&mut self, parent: NodeIdx) {
         self.parent = Some(parent);
@@ -445,16 +452,13 @@ impl<D> Node<D> {
         self.children.push(child);
     }
 
-    #[inline(always)]
-    pub fn node_idx(&self) -> NodeIdx {
-        self.idx
-    }
-
+    #[deprecated]
     #[inline(always)]
     pub fn data_ref(&self) -> &D {
         &self.data
     }
 
+    #[deprecated]
     #[inline(always)]
     pub fn data_mut(&mut self) -> &mut D {
         &mut self.data
