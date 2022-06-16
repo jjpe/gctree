@@ -102,16 +102,23 @@ where
         Ok(())
     }
 
-    /// Copy a `src` tree to `self`, making it a subtree of `self` in the process.
-    /// Specifically, `src[ROOT]` becomes a child node of `self[dst_node_idx]`.
-    /// Note that the `NodeIdx`s of the nodes in `src` will *NOT* be valid in `self`.
-    pub fn add_subtree(&mut self, dst_node_idx: NodeIdx, src: &Self) -> TreeResult<()> {
+    #[rustfmt::skip]
+    /// Copy a `src` tree to `self`, making it a subtree of `self` in
+    /// the process.  Specifically, `src[ROOT]` becomes a child node
+    /// of `self[dst_node_idx]`.
+    /// Note that the `NodeIdx`s of the nodes in `src` will *NOT* be
+    /// valid in `self`.
+    pub fn add_subtree(
+        &mut self,
+        dst_node_idx: NodeIdx,
+        src: &Self
+    ) -> TreeResult<()> {
         type SrcTreeIdx = Option<NodeIdx>;
         type DstTreeIdx = NodeIdx;
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
         let dst = self;
-        for src_node_idx in src.dfs(NodeIdx::ROOT)? {
+        for src_node_idx in src.dfs(NodeIdx::ROOT) {
             let src_parent_idx = src[src_node_idx].parent;
             let dst_parent_idx = map.get(&src_parent_idx).map(|&idx| idx);
             let dst_node_idx = dst.new_node(dst_parent_idx)?;
@@ -122,7 +129,7 @@ where
     }
 
     pub fn remove_subtree(&mut self, start: NodeIdx) -> TreeResult<()> {
-        for nidx in self.dfs(start)?.rev(/*from the leaves toward the root*/) {
+        for nidx in self.dfs(start).rev(/*from the leaves toward the root*/) {
             debug_assert!(self[nidx].children.is_empty());
             self.destroy_node(nidx)?;
         }
@@ -181,32 +188,34 @@ where
         Ok(self[idx].children())
     }
 
+    #[rustfmt::skip]
     /// Return an iterator over the nodes, in DFS order,
     /// of the subtree rooted in `start`.
-    pub fn dfs(&self, start: NodeIdx) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx>> {
+    pub fn dfs(
+        &self,
+        start: NodeIdx
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         let mut output: Vec<NodeIdx> = Vec::with_capacity(self.nodes.len());
         let mut stack: Vec<NodeIdx> = vec![start];
         while let Some(idx) = stack.pop() {
             output.push(idx);
             stack.extend(self[idx].children().rev());
         }
-        Ok(output.into_iter())
+        output.into_iter()
     }
 
     #[rustfmt::skip]
-    #[allow(unused)]
     /// Return an iterator, in BFS order, over the `NodeIdx`s
     /// of the nodes of the the subtree rooted in `start`.
     pub fn bfs(
         &self,
         start: NodeIdx
-    ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx>> {
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         type Layer = Vec<NodeIdx>;
-        let start_layer: Layer = vec![start];
-        let mut layers: Vec<Layer> = vec![start_layer];
+        let mut layers: Vec<Layer> = vec![Layer::from([start])];
         let mut current: Layer = vec![];
-        while let Some(ref previous) = layers.last() {
-            for &idx in previous.iter() {
+        while let Some(previous_layer) = layers.last() {
+            for &idx in previous_layer {
                 current.extend(self[idx].children());
             }
             if current.is_empty() {
@@ -215,7 +224,7 @@ where
             layers.push(current);
             current = vec![];
         }
-        Ok(layers.into_iter().flat_map(|layer| layer.into_iter()))
+        layers.into_iter().flat_map(|layer| layer.into_iter())
     }
 }
 
@@ -247,7 +256,7 @@ where
         // NOTE: This loop is `O(D * N)`, where:
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
-        for node_idx in self.dfs(NodeIdx::ROOT).unwrap(/*TreeResult*/) {
+        for node_idx in self.dfs(NodeIdx::ROOT) {
             let num_ancestors: usize = self.ancestors_of(node_idx)
                 .unwrap(/*TreeResult*/)
                 .count();
@@ -606,7 +615,7 @@ mod tests {
     #[test]
     fn dfs_traversal() -> TreeResult<()> {
         let data = make_data()?;
-        let dfs_order: Vec<_> = data.tree.dfs(data.root)?.collect();
+        let dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
         assert_eq!(dfs_order, data.dfs_order);
         Ok(())
     }
@@ -614,7 +623,7 @@ mod tests {
     #[test]
     fn bfs_traversal() -> TreeResult<()> {
         let data = make_data()?;
-        let bfs_order: Vec<_> = data.tree.bfs(data.root)?.collect();
+        let bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(bfs_order, data.bfs_order);
         Ok(())
     }
@@ -709,9 +718,9 @@ mod tests {
         let mut data = make_data()?;
         let node0 = NodeIdx(1);
         data.tree.remove_subtree(node0)?;
-        let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root)?.collect();
+        let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
-        let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root)?.collect();
+        let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
         assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
         Ok(())
     }
