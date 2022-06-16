@@ -575,6 +575,7 @@ impl std::ops::Add<usize> for NodeIdx {
 mod tests {
     use super::*;
 
+    #[derive(Debug)]
     struct Data {
         tree: ArenaTree<()>,
         root: NodeIdx,
