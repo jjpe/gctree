@@ -18,7 +18,6 @@ pub struct ArenaTree<D: Clone + Debug + Default + PartialEq> {
     garbage: VecDeque<NodeIdx>,
 }
 
-#[allow(unused)]
 impl<D> ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq,
@@ -194,7 +193,7 @@ where
             .find(|&(_i, &cidx)| cidx == target_idx)
             .unwrap(/*should be safe*/);
         assert_eq!(tidx, target_idx);
-        let rm_idx = self[parent_idx].children.swap_remove(i);
+        let _removed_node_idx = self[parent_idx].children.swap_remove(i);
 
         // Clean up:
         self.remove_subtree(target_idx)?;
