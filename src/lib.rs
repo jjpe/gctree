@@ -137,7 +137,10 @@ where
     }
 
     #[rustfmt::skip]
-    /// Make `self[subroot_idx]` a child node of `self[parent_idx]`
+    /// Make `self[subroot_idx]` a child node of `self[parent_idx]`.
+    /// Specifically, `self[subroot_idx]` becomes the *last* child
+    /// node of `self[parent_idx]`.
+    ///
     // /// If `parent_idx` is `None`,
     pub fn move_subtree(
         &mut self,
