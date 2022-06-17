@@ -167,6 +167,39 @@ where
         }
         Ok(())
     }
+
+    /// Replace the subtree rooted @ `self[target_idx]` with the subtree
+    /// rooted @ `self[subroot_idx]`.  This means that `self[target_idx]`
+    /// is removed from `self` and `self[subroot_idx]` takes its place.
+    pub fn replace_subtree(
+        &mut self,
+        target_idx: NodeIdx,
+        subroot_idx: NodeIdx,
+    ) -> TreeResult<()> {
+        let parent_idx = self[target_idx].parent
+            // TODO: Remove the `.ok_or()` line below, as well as the
+            //       `TreeError::NodeHasNoParent` enum variant used
+            //       in it, after adding multiple root support in
+            //       ArenaTree as well as in the self.move_subtree()
+            //       method definition above:
+            .ok_or(TreeError::NodeHasNoParent { node_idx: target_idx })?
+            ;
+        self.move_subtree(subroot_idx, parent_idx)?;
+
+        // At this stage, `self[subroot_idx]` is a child of `self[parent_idx]`.
+        // However, it is the last child rather than whatever position
+        // `self[target_idx]` occupies. Let's rectify that:
+        let (i, &tidx) = self[parent_idx].children.iter().enumerate()
+            .find(|&(_i, &cidx)| cidx == target_idx)
+            .unwrap(/*should be safe*/);
+        assert_eq!(tidx, target_idx);
+        let rm_idx = self[parent_idx].children.swap_remove(i);
+
+        // Clean up:
+        self.remove_subtree(target_idx)?;
+
+        Ok(())
+    }
     /// Return an iterator over the ancestors of `idx`, starting with
     /// the parent of `idx` and going toward the root of the tree.
     #[inline(always)]
@@ -809,6 +842,82 @@ mod tests {
             tree, expected,
             "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
         );
+
+        Ok(())
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn replace_subtree() -> TreeResult<()> {
+        let data = make_data()?;
+        let mut tree = data.tree.clone();
+        println!("0 tree:\n\n{tree}\n{tree:#?}\n");
+
+        // Replace `self[target_idx]` with `self[subroot_idx]`:
+        tree.replace_subtree(
+            NodeIdx(2), // target_idx
+            NodeIdx(6), // subroot_idx
+        )?;
+        println!("1 tree:\n\n{tree}\n{tree:#?}\n");
+
+        assert_eq!(tree[NodeIdx(0)].children, [NodeIdx(1), NodeIdx(4)]);
+        assert_eq!(tree[NodeIdx(1)].children, [NodeIdx(6), NodeIdx(3)]);
+        assert_eq!(tree[NodeIdx(6)].children, [NodeIdx(7), NodeIdx(9)]);
+        assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
+        assert_eq!(tree[NodeIdx(4)].children, [NodeIdx(5)]);
+        assert_eq!(tree[NodeIdx(0)].parent, None);
+        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(4)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(1)));
+        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
+        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
+        assert_eq!(tree[NodeIdx(5)].parent, Some(NodeIdx(4)));
+
+        // Replace `self[target_idx]` with `self[subroot_idx]`:
+        tree.replace_subtree(
+            NodeIdx(4), // target_idx
+            NodeIdx(6), // subroot_idx
+        )?;
+        println!("2 tree:\n\n{tree}\n{tree:#?}\n");
+
+        assert_eq!(tree[NodeIdx(0)].children, [NodeIdx(1), NodeIdx(6)]);
+        assert_eq!(tree[NodeIdx(1)].children, [NodeIdx(3)]);
+        assert_eq!(tree[NodeIdx(6)].children, [NodeIdx(7), NodeIdx(9)]);
+        assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
+        assert_eq!(tree[NodeIdx(0)].parent, None);
+        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
+        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
+
+        let _node02_idx = tree.new_node(NodeIdx(0))?;
+        let _node020_idx = tree.new_node(_node02_idx)?;
+        let _node0200_idx = tree.new_node(_node020_idx)?;
+        println!("3 tree:\n\n{tree}\n{tree:#?}\n");
+
+        assert_eq!(
+            tree[NodeIdx(0)].children,
+            [NodeIdx(1), NodeIdx(6), NodeIdx(2)]
+        );
+        assert_eq!(tree[NodeIdx(1)].children, [NodeIdx(3)]);
+        assert_eq!(tree[NodeIdx(6)].children, [NodeIdx(7), NodeIdx(9)]);
+        assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
+        assert_eq!(tree[NodeIdx(2)].children, [NodeIdx(5)]);
+        assert_eq!(tree[NodeIdx(5)].children, [NodeIdx(4)]);
+        assert_eq!(tree[NodeIdx(0)].parent, None);
+        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(2)].parent, Some(NodeIdx(0)));
+        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
+        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
+        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
+        assert_eq!(tree[NodeIdx(5)].parent, Some(NodeIdx(2)));
+        assert_eq!(tree[NodeIdx(4)].parent, Some(NodeIdx(5)));
 
         Ok(())
     }

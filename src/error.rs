@@ -20,4 +20,7 @@ pub type TreeResult<T> = Result<T, TreeError>;
 pub enum TreeError {
     /// Couldn't find a node for the NodeIdx {idx:?}.
     NoNodeForNodeIdx { idx: NodeIdx },
+
+    /// Expected a parent node for the node @ `node_idx`, but `None` was found
+    NodeHasNoParent { node_idx: NodeIdx },
 }
