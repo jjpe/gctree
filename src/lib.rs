@@ -168,6 +168,7 @@ where
         Ok(())
     }
 
+    #[rustfmt::skip]
     /// Replace the subtree rooted @ `self[target_idx]` with the subtree
     /// rooted @ `self[subroot_idx]`.  This means that `self[target_idx]`
     /// is removed from `self` and `self[subroot_idx]` takes its place.
@@ -200,6 +201,7 @@ where
 
         Ok(())
     }
+
     /// Return an iterator over the ancestors of `idx`, starting with
     /// the parent of `idx` and going toward the root of the tree.
     #[inline(always)]
