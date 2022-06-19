@@ -35,6 +35,26 @@ where
         }
     }
 
+    /// Get the logical size, which is defined as `physical size - garbage size`
+    /// i.e. the number of allocated, non-garbage nodes in `self`.
+    #[inline]
+    pub fn logical_size(&self) -> NodeCount {
+        self.physical_size() - self.garbage_size()
+    }
+
+    /// Get the physical size, which is defined as the number of nodes
+    /// allocated in the tree, whether they are garbage or not.
+    #[inline]
+    pub fn physical_size(&self) -> NodeCount {
+        NodeCount(self.nodes.len())
+    }
+
+    /// Get the garbage size i.e. the number of garbage nodes in `self`.
+    #[inline]
+    pub fn garbage_size(&self) -> NodeCount {
+        NodeCount(self.garbage.len())
+    }
+
     #[inline(always)]
     pub fn root_ref(&self) -> TreeResult<&Node<D>> {
         Ok(self.node_ref(NodeIdx::ROOT)?)
@@ -474,6 +494,45 @@ where
 pub struct ArenaTreeDelta<D>(Option<ArenaTree<D>>)
 where
     D: Clone + Debug + Default + PartialEq + Core;
+
+#[rustfmt::skip]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde_derive::Serialize,
+    serde_derive::Deserialize
+)]
+pub struct NodeCount(usize);
+
+impl std::ops::Deref for NodeCount {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::Add<Self> for NodeCount {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl std::ops::Sub<Self> for NodeCount {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
 
 #[rustfmt::skip]
 #[derive(
