@@ -559,18 +559,6 @@ impl<D> Node<D> {
         self.idx
     }
 
-    #[deprecated]
-    #[inline(always)]
-    pub fn parent(&self) -> Option<NodeIdx> {
-        self.parent
-    }
-
-    #[deprecated]
-    #[inline(always)]
-    pub fn set_parent(&mut self, parent: NodeIdx) {
-        self.parent = Some(parent);
-    }
-
     #[inline(always)]
     pub fn children<'n>(&'n self) -> impl DoubleEndedIterator<Item = NodeIdx> + 'n {
         self.children.iter().map(|&idx| idx)
@@ -583,18 +571,6 @@ impl<D> Node<D> {
     #[inline(always)]
     pub fn add_child(&mut self, child: NodeIdx) {
         self.children.push(child);
-    }
-
-    #[deprecated]
-    #[inline(always)]
-    pub fn data_ref(&self) -> &D {
-        &self.data
-    }
-
-    #[deprecated]
-    #[inline(always)]
-    pub fn data_mut(&mut self) -> &mut D {
-        &mut self.data
     }
 }
 
