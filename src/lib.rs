@@ -534,7 +534,6 @@ impl std::ops::Sub<Self> for NodeCount {
     }
 }
 
-
 #[rustfmt::skip]
 #[derive(
     Clone,
