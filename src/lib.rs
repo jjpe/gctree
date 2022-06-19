@@ -216,6 +216,7 @@ where
         let _removed_node_idx = self[parent_idx].children.swap_remove(i);
 
         // Clean up:
+        assert_eq!(target_idx, _removed_node_idx);
         self.remove_subtree(target_idx)?;
 
         Ok(())
