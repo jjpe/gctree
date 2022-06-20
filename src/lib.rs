@@ -9,10 +9,11 @@ use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Debug};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Hash)]
 pub struct ArenaTree<D: Clone + Debug + Default + PartialEq> {
     nodes: Vec<Node<D>>,
     garbage: VecDeque<NodeIdx>,
@@ -283,6 +284,125 @@ where
             current = vec![];
         }
         layers.into_iter().flat_map(|layer| layer.into_iter())
+    }
+}
+
+#[rustfmt::skip]
+impl<D> PartialEq<Self> for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        // NOTE: The idea is to do a logical comparison where:
+        // 1. Garbage nodes are excluded from comparison
+        // 2. Non-garbage nodes are compared in DFS order
+        if self.logical_size() != other.logical_size() {
+            return false;
+        }
+        let snode_iter =  self.dfs(NodeIdx::ROOT);
+        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let mut map = HashMap::new();
+        for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
+            map.insert(snode_idx, onode_idx);
+            let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
+            let (sdata, odata) = (&**snode, &**onode);
+            match (snode.parent, onode.parent) {
+                (None, None) => {/*NOP*/},
+                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
+                _ => return false,
+            }
+            if snode.count_children() != onode.count_children() {
+                return false;
+            }
+            if sdata != odata {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[rustfmt::skip]
+impl<D> Eq for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq,
+{}
+
+#[rustfmt::skip]
+impl<D> PartialOrd<Self> for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq + PartialOrd,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        // NOTE: The idea is to do a logical comparison where:
+        // 1. Garbage nodes are excluded from comparison
+        // 2. Non-garbage nodes are compared in DFS order
+        let size_cmp = self.logical_size().partial_cmp(&other.logical_size());
+        if let Some(Ordering::Greater | Ordering::Less) = size_cmp {
+            return size_cmp;
+        }
+        let snode_iter =  self.dfs(NodeIdx::ROOT);
+        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let mut map = HashMap::new();
+        for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
+            map.insert(snode_idx, onode_idx);
+            let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
+            let (sdata, odata) = (&**snode, &**onode);
+            match (snode.parent, onode.parent) {
+                (None, None) => {/*NOP*/},
+                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
+                _ => return snode.parent.partial_cmp(&onode.parent),
+            }
+            let child_count_cmp = snode.count_children()
+                .partial_cmp(&onode.count_children());
+            if let Some(Ordering::Greater | Ordering::Less) = child_count_cmp {
+                return child_count_cmp;
+            }
+            let data_cmp = sdata.partial_cmp(&odata);
+            if let Some(Ordering::Greater | Ordering::Less) = data_cmp {
+                return data_cmp;
+            }
+        }
+        Some(Ordering::Equal)
+    }
+}
+
+#[rustfmt::skip]
+impl<D> Ord for ArenaTree<D>
+where
+    D: Clone + Debug + Default + PartialEq + Ord,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        // NOTE: The idea is to do a logical comparison where:
+        // 1. Garbage nodes are excluded from comparison
+        // 2. Non-garbage nodes are compared in DFS order
+        let size_cmp = self.logical_size().cmp(&other.logical_size());
+        if let Ordering::Greater | Ordering::Less = size_cmp {
+            return size_cmp;
+        }
+        let snode_iter =  self.dfs(NodeIdx::ROOT);
+        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let mut map = HashMap::new();
+        for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
+            map.insert(snode_idx, onode_idx);
+            let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
+            let (sdata, odata) = (&**snode, &**onode);
+            match (snode.parent, onode.parent) {
+                (None, None) => {/*NOP*/},
+                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
+                _ => return snode.parent.cmp(&onode.parent),
+            }
+            let child_count_cmp = snode.count_children()
+                .cmp(&onode.count_children());
+            if let Ordering::Greater | Ordering::Less = child_count_cmp {
+                return child_count_cmp;
+            }
+            let data_cmp = sdata.cmp(&odata);
+            if let Ordering::Greater | Ordering::Less = data_cmp {
+                return data_cmp;
+            }
+        }
+        Ordering::Equal
     }
 }
 
