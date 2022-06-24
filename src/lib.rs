@@ -149,6 +149,9 @@ where
     }
 
     pub fn remove_subtree(&mut self, start: NodeIdx) -> TreeResult<()> {
+        if self.garbage.contains(&start) {
+            return Ok(()); // Don't try to remove garbage
+        }
         for nidx in self.dfs(start).rev(/*from the leaves toward the root*/) {
             debug_assert!(self[nidx].children.is_empty());
             self.destroy_node(nidx)?;
@@ -948,6 +951,30 @@ mod tests {
         data.tree.remove_subtree(node0)?;
         let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
+        let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
+        assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_subtree_multiply() -> TreeResult<()> {
+        let mut data = make_data()?;
+        let node0 = NodeIdx(1);
+
+        println!("initial:\n{}\n{:#?}", data.tree, data.tree);
+        assert!(data.tree.garbage.is_empty());
+
+        data.tree.remove_subtree(node0)?;
+        println!("after removal 1:\n{}\n{:#?}", data.tree, data.tree);
+        assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
+
+        data.tree.remove_subtree(node0)?;
+        println!("after removal 2:\n{}\n{:#?}", data.tree, data.tree);
+        assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
+
+        let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
+        assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
+
         let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
         assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
         Ok(())
