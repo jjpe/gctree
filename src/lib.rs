@@ -695,6 +695,16 @@ impl<D> Node<D> {
     pub fn add_child(&mut self, child: NodeIdx) {
         self.children.push(child);
     }
+
+    #[inline(always)]
+    pub fn clear(&mut self)
+    where
+        D: Default
+    {
+        self.parent = None;
+        self.children.clear();
+        self.data = D::default();
+    }
 }
 
 impl<D> std::ops::Deref for Node<D> {
