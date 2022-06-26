@@ -155,11 +155,10 @@ where
     }
 
     #[rustfmt::skip]
-    /// Make `self[subroot_idx]` a child node of `self[parent_idx]`.
-    /// Specifically, `self[subroot_idx]` becomes the *last* child
-    /// node of `self[parent_idx]`.
+    /// Make `self[subroot_idx]` the last child node of `self[parent_idx]`.
+    /// Returns an error if `self[subroot_idx].parent` equals `None`.
     ///
-    // /// If `parent_idx` is `None`,
+    // /// If `parent_idx` is `None`, ...
     pub fn move_subtree(
         &mut self,
         subroot_idx: NodeIdx,
@@ -168,18 +167,10 @@ where
         // parent_idx: impl Into<Option<NodeIdx>>,
         parent_idx: NodeIdx,
     ) -> TreeResult<()> {
-        // Remove `subroot_idx` from the children of the old parent node
-        // of `self[subroot_idx]`, if that parent node exists:
-        if let Some(old_subroot_parent_idx) = self[subroot_idx].parent {
-            let children = &mut self[old_subroot_parent_idx].children;
-            *children = children.drain(..)
-                .filter(|&cidx| cidx != subroot_idx)
-                .collect();
-        }
-        // Update the parent idx of `self[subroot_idx]`:
+        let old_parent_idx = self[subroot_idx].parent
+            .ok_or(TreeError::ParentNotFound { node_idx: subroot_idx })?;
+        self[old_parent_idx].remove_child_idx(subroot_idx);
         self[subroot_idx].parent = parent_idx.into();
-        // If the parent node exists, push `subroot_idx`
-        // to `self[parent_idx].children`:
         if let Some(parent_idx) = self[subroot_idx].parent {
             self[parent_idx].add_child(subroot_idx);
         }
@@ -197,27 +188,21 @@ where
     ) -> TreeResult<()> {
         let parent_idx = self[target_idx].parent
             // TODO: Remove the `.ok_or()` line below, as well as the
-            //       `TreeError::NodeHasNoParent` enum variant used
+            //       `TreeError::ParentNotFound` enum variant used
             //       in it, after adding multiple root support in
             //       ArenaTree as well as in the self.move_subtree()
             //       method definition above:
-            .ok_or(TreeError::NodeHasNoParent { node_idx: target_idx })?
+            .ok_or(TreeError::ParentNotFound { node_idx: target_idx })?
             ;
         self.move_subtree(subroot_idx, parent_idx)?;
-
-        // At this stage, `self[subroot_idx]` is a child of `self[parent_idx]`.
-        // However, it is the last child rather than whatever position
-        // `self[target_idx]` occupies. Let's rectify that:
-        let (i, &tidx) = self[parent_idx].children.iter().enumerate()
-            .find(|&(_i, &cidx)| cidx == target_idx)
+        // Rather than having the ordinal number of `self[target_idx]`,
+        // `self[subroot_idx]` is the last child of `self[parent_idx]`.
+        // Let's rectify that by swapping the 2:
+        let ordinal = self[parent_idx].get_child_ordinal(target_idx)
             .unwrap(/*should be safe*/);
-        assert_eq!(tidx, target_idx);
-        let _removed_node_idx = self[parent_idx].children.swap_remove(i);
-
-        // Clean up:
-        assert_eq!(target_idx, _removed_node_idx);
-        self.remove_subtree(target_idx)?;
-
+        let removed_node_idx = self[parent_idx].children.swap_remove(ordinal);
+        assert_eq!(target_idx, removed_node_idx);
+        self.remove_subtree(target_idx)?; // Clean up
         Ok(())
     }
 
@@ -711,6 +696,20 @@ impl<D> Node<D> {
         self.parent = None;
         self.children.clear();
         self.data = D::default();
+    }
+
+    /// Assuming that `child_idx` is a member of `self.children`, return the
+    /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
+    /// for `child_idx` e.g. the leftmost child is the `zeroth` child of
+    /// `self`.
+    /// Return `None` if `child_idx` is not a member of `self.children`.
+    #[inline]
+    #[rustfmt::skip]
+    pub fn get_child_ordinal(&self, child_idx: NodeIdx) -> Option<usize> {
+        self.children.iter().enumerate()
+            .filter(|(_, &cidx)| cidx == child_idx)
+            .map(|(ordinal_numeral, _)| ordinal_numeral)
+            .next()
     }
 }
 
