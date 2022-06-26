@@ -4,7 +4,9 @@
 mod error;
 
 pub use crate::error::{TreeError, TreeResult};
-use deltoid::{Apply, Core, Delta, DeltaError, DeltaResult, FromDelta, IntoDelta};
+use deltoid::{
+    Apply, Core, Delta, DeltaError, DeltaResult, FromDelta, IntoDelta,
+};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -66,7 +68,6 @@ where
         &mut self[NodeIdx::ROOT]
     }
 
-    #[rustfmt::skip]
     pub fn new_node(
         &mut self,
         parent_idx: impl Into<Option<NodeIdx>>,
@@ -93,7 +94,6 @@ where
         }
     }
 
-    #[rustfmt::skip]
     fn destroy_node(&mut self, node_idx: NodeIdx) -> TreeResult<()> {
         if let Some(parent_idx) = self[node_idx].parent {
             // Filter out the NodeIdx from the parent's child indices
@@ -104,7 +104,6 @@ where
         Ok(())
     }
 
-    #[rustfmt::skip]
     /// Copy a `src` tree to `self`, making it a subtree of `self` in
     /// the process.  Specifically, `src[ROOT]` becomes a child node
     /// of `self[dst_node_idx]`.
@@ -113,7 +112,7 @@ where
     pub fn add_subtree(
         &mut self,
         dst_node_idx: NodeIdx,
-        src: &Self
+        src: &Self,
     ) -> TreeResult<()> {
         type SrcTreeIdx = Option<NodeIdx>;
         type DstTreeIdx = NodeIdx;
@@ -217,15 +216,14 @@ where
         self[node_idx].children()
     }
 
-    #[rustfmt::skip]
     /// Return an iterator over the nodes, in DFS order,
     /// of the subtree rooted in `start_idx`.
     pub fn dfs(
         &self,
-        start_idx: NodeIdx
+        start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        let mut output: Vec<NodeIdx> = Vec::with_capacity(self.nodes.len());
-        let mut stack: Vec<NodeIdx> = vec![start_idx];
+        let mut output = Vec::with_capacity(self.nodes.len());
+        let mut stack = vec![start_idx];
         while let Some(node_idx) = stack.pop() {
             output.push(node_idx);
             stack.extend(self[node_idx].children().rev());
@@ -233,12 +231,11 @@ where
         output.into_iter()
     }
 
-    #[rustfmt::skip]
     /// Return an iterator, in BFS order, over the `NodeIdx`s
     /// of the nodes of the the subtree rooted in `start_idx`.
     pub fn bfs(
         &self,
-        start_idx: NodeIdx
+        start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         type Layer = Vec<NodeIdx>;
         let mut layers: Vec<Layer> = vec![Layer::from([start_idx])];
@@ -257,7 +254,6 @@ where
     }
 }
 
-#[rustfmt::skip]
 impl<D> PartialEq<Self> for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq,
@@ -269,7 +265,7 @@ where
         if self.logical_size() != other.logical_size() {
             return false;
         }
-        let snode_iter =  self.dfs(NodeIdx::ROOT);
+        let snode_iter = self.dfs(NodeIdx::ROOT);
         let onode_iter = other.dfs(NodeIdx::ROOT);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
@@ -277,8 +273,10 @@ where
             let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
             let (sdata, odata) = (&**snode, &**onode);
             match (snode.parent, onode.parent) {
-                (None, None) => {/*NOP*/},
-                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
+                (None, None) => { /*NOP*/ }
+                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {
+                    // NOP
+                }
                 _ => return false,
             }
             if snode.count_children() != onode.count_children() {
@@ -311,7 +309,7 @@ where
         if let Some(Ordering::Greater | Ordering::Less) = size_cmp {
             return size_cmp;
         }
-        let snode_iter =  self.dfs(NodeIdx::ROOT);
+        let snode_iter = self.dfs(NodeIdx::ROOT);
         let onode_iter = other.dfs(NodeIdx::ROOT);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
@@ -319,8 +317,8 @@ where
             let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
             let (sdata, odata) = (&**snode, &**onode);
             match (snode.parent, onode.parent) {
-                (None, None) => {/*NOP*/},
-                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
+                (None, None) => { /*NOP*/ }
+                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/}
                 _ => return snode.parent.partial_cmp(&onode.parent),
             }
             let child_count_cmp = snode.count_children()
@@ -418,6 +416,7 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<D: Serialize> Serialize for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq + Serialize,
@@ -431,6 +430,7 @@ where
     }
 }
 
+#[rustfmt::skip]
 impl<'de, D> Deserialize<'de> for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
@@ -650,7 +650,9 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    pub fn children<'n>(&'n self) -> impl DoubleEndedIterator<Item = NodeIdx> + 'n {
+    pub fn children<'n>(
+        &'n self,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + 'n {
         self.children.iter().map(|&idx| idx)
     }
 
