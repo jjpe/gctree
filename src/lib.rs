@@ -130,13 +130,13 @@ where
         Ok(())
     }
 
-    pub fn remove_subtree(&mut self, start: NodeIdx) -> TreeResult<()> {
-        if self.garbage.contains(&start) {
+    pub fn remove_subtree(&mut self, start_idx: NodeIdx) -> TreeResult<()> {
+        if self.garbage.contains(&start_idx) {
             return Ok(()); // Don't try to remove garbage
         }
-        for nidx in self.dfs(start).rev(/*from the leaves toward the root*/) {
-            debug_assert!(self[nidx].children.is_empty());
-            self.destroy_node(nidx)?;
+        for node_idx in self.dfs(start_idx).rev(/*leaves -> ... -> root*/) {
+            debug_assert!(self[node_idx].children.is_empty());
+            self.destroy_node(node_idx)?;
         }
         Ok(())
     }
@@ -198,13 +198,13 @@ where
     #[inline(always)]
     pub fn ancestors_of<'t>(
         &'t self,
-        idx: NodeIdx,
+        node_idx: NodeIdx,
     ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx> + 't> {
         let mut ancestors = vec![];
-        let mut current: NodeIdx = idx;
-        while let Some(pidx) = self[current].parent {
-            ancestors.push(pidx);
-            current = pidx;
+        let mut current: NodeIdx = node_idx;
+        while let Some(parent_idx) = self[current].parent {
+            ancestors.push(parent_idx);
+            current = parent_idx;
         }
         Ok(ancestors.into_iter())
     }
@@ -219,29 +219,29 @@ where
 
     #[rustfmt::skip]
     /// Return an iterator over the nodes, in DFS order,
-    /// of the subtree rooted in `start`.
+    /// of the subtree rooted in `start_idx`.
     pub fn dfs(
         &self,
-        start: NodeIdx
+        start_idx: NodeIdx
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         let mut output: Vec<NodeIdx> = Vec::with_capacity(self.nodes.len());
-        let mut stack: Vec<NodeIdx> = vec![start];
-        while let Some(idx) = stack.pop() {
-            output.push(idx);
-            stack.extend(self[idx].children().rev());
+        let mut stack: Vec<NodeIdx> = vec![start_idx];
+        while let Some(node_idx) = stack.pop() {
+            output.push(node_idx);
+            stack.extend(self[node_idx].children().rev());
         }
         output.into_iter()
     }
 
     #[rustfmt::skip]
     /// Return an iterator, in BFS order, over the `NodeIdx`s
-    /// of the nodes of the the subtree rooted in `start`.
+    /// of the nodes of the the subtree rooted in `start_idx`.
     pub fn bfs(
         &self,
-        start: NodeIdx
+        start_idx: NodeIdx
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         type Layer = Vec<NodeIdx>;
-        let mut layers: Vec<Layer> = vec![Layer::from([start])];
+        let mut layers: Vec<Layer> = vec![Layer::from([start_idx])];
         let mut current: Layer = vec![];
         while let Some(previous_layer) = layers.last() {
             for &idx in previous_layer {
