@@ -18,9 +18,6 @@ pub type TreeResult<T> = Result<T, TreeError>;
     thiserror::Error,
 )]
 pub enum TreeError {
-    /// Couldn't find a node for the NodeIdx {idx:?}.
-    NoNodeForNodeIdx { idx: NodeIdx },
-
     /// Expected `tree[node_idx]` to have a parent node
     ParentNotFound { node_idx: NodeIdx },
 }

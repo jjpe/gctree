@@ -66,19 +66,6 @@ where
         &mut self[NodeIdx::ROOT]
     }
 
-    #[inline(always)]
-    pub fn node_ref(&self, idx: NodeIdx) -> TreeResult<&Node<D>> {
-        self.nodes
-            .get(idx.0)
-            .ok_or(TreeError::NoNodeForNodeIdx { idx })
-    }
-
-    #[inline(always)]
-    pub fn node_mut(&mut self, idx: NodeIdx) -> TreeResult<&mut Node<D>> {
-        self.nodes
-            .get_mut(idx.0)
-            .ok_or(TreeError::NoNodeForNodeIdx { idx })
-    }
 
     pub fn new_node(
         &mut self,
