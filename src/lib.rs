@@ -57,13 +57,13 @@ where
     }
 
     #[inline(always)]
-    pub fn root_ref(&self) -> TreeResult<&Node<D>> {
-        Ok(self.node_ref(NodeIdx::ROOT)?)
+    pub fn root_ref(&self) -> &Node<D> {
+        &self[NodeIdx::ROOT]
     }
 
     #[inline(always)]
-    pub fn root_mut(&mut self) -> TreeResult<&mut Node<D>> {
-        Ok(self.node_mut(NodeIdx::ROOT)?)
+    pub fn root_mut(&mut self) -> &mut Node<D> {
+        &mut self[NodeIdx::ROOT]
     }
 
     #[inline(always)]
