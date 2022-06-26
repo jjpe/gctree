@@ -66,7 +66,7 @@ where
         &mut self[NodeIdx::ROOT]
     }
 
-
+    #[rustfmt::skip]
     pub fn new_node(
         &mut self,
         parent_idx: impl Into<Option<NodeIdx>>,
@@ -666,6 +666,7 @@ impl<D> Node<D> {
     /// Filter out `child_idx` from `self.children`.
     /// Has no effect if `self.children` does not contain `child_idx`.
     #[inline]
+    #[rustfmt::skip]
     pub fn remove_child_idx(&mut self, child_idx: NodeIdx) {
         if !self.children.contains(&child_idx) {
             return;
@@ -678,7 +679,7 @@ impl<D> Node<D> {
     #[inline(always)]
     pub fn clear(&mut self)
     where
-        D: Default
+        D: Default,
     {
         self.parent = None;
         self.children.clear();
