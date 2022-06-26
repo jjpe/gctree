@@ -107,17 +107,13 @@ where
     }
 
     #[rustfmt::skip]
-    fn destroy_node(&mut self, idx: NodeIdx) -> TreeResult<()> {
-        if let Some(pidx) = self[idx].parent {
+    fn destroy_node(&mut self, node_idx: NodeIdx) -> TreeResult<()> {
+        if let Some(parent_idx) = self[node_idx].parent {
             // Filter out the NodeIdx from the parent's child indices
-            self[pidx].children = self[pidx].children.drain(..)
-                .filter(|&child_idx| child_idx != idx)
-                .collect();
+            self[parent_idx].remove_child_idx(node_idx);
         }
-        self[idx].parent = None;
-        self[idx].children = vec![];
-        self[idx].data = D::default();
-        self.garbage.push_back(idx);
+        self[node_idx].clear();
+        self.garbage.push_back(node_idx);
         Ok(())
     }
 
