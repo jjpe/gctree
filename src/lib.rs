@@ -691,8 +691,20 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    pub fn add_child(&mut self, child: NodeIdx) {
-        self.children.push(child);
+    pub fn add_child(&mut self, child_idx: NodeIdx) {
+        self.children.push(child_idx);
+    }
+
+    /// Filter out `child_idx` from `self.children`.
+    /// Has no effect if `self.children` does not contain `child_idx`.
+    #[inline]
+    pub fn remove_child_idx(&mut self, child_idx: NodeIdx) {
+        if !self.children.contains(&child_idx) {
+            return;
+        }
+        self.children = self.children.drain(..)
+            .filter(|&cidx| cidx != child_idx)
+            .collect();
     }
 
     #[inline(always)]
