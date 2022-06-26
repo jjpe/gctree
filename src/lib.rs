@@ -1,5 +1,6 @@
 //! This module defines a low-level and cache-friendly tree
 //! datastructure that can be newtyped for higher-level trees.
+#![forbid(unsafe_code)]
 
 mod error;
 
@@ -381,7 +382,7 @@ where
     type Output = Node<D>;
 
     fn index(&self, idx: NodeIdx) -> &Self::Output {
-        unsafe { self.nodes.get_unchecked(idx.0) }
+        &self.nodes[idx.0]
     }
 }
 
@@ -390,7 +391,7 @@ where
     D: Clone + Debug + Default + PartialEq,
 {
     fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
-        unsafe { self.nodes.get_unchecked_mut(idx.0) }
+        &mut self.nodes[idx.0]
     }
 }
 
