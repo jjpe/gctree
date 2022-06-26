@@ -80,30 +80,29 @@ where
             .ok_or(TreeError::NoNodeForNodeIdx { idx })
     }
 
-    pub fn new_node<P>(&mut self, parent: P) -> TreeResult<NodeIdx>
-    where
-        P: Into<Option<NodeIdx>>,
-    {
+    pub fn new_node(
+        &mut self,
+        parent_idx: impl Into<Option<NodeIdx>>,
+    ) -> TreeResult<NodeIdx> {
         if let Some(cidx) = self.garbage.pop_front() {
-            self[cidx].parent = parent.into();
-            self[cidx].data = D::default();
+            self[cidx].clear();
+            self[cidx].parent = parent_idx.into();
             if let Some(pidx) = self[cidx].parent {
                 self[pidx].add_child(cidx)
             }
             Ok(cidx)
         } else {
-            let parent: Option<NodeIdx> = parent.into();
-            let cidx = NodeIdx(self.nodes.len());
+            let child_idx = NodeIdx(self.nodes.len());
             self.nodes.push(Node {
-                idx: cidx,
-                parent,
+                idx: child_idx,
+                parent: parent_idx.into(),
                 children: vec![],
                 data: D::default(),
             });
-            if let Some(pidx) = parent {
-                self[pidx].add_child(cidx);
+            if let Some(parent_idx) = self[child_idx].parent {
+                self[parent_idx].add_child(child_idx);
             }
-            Ok(cidx)
+            Ok(child_idx)
         }
     }
 
