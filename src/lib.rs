@@ -212,9 +212,9 @@ where
     #[inline(always)]
     pub fn children_of<'t>(
         &'t self,
-        idx: NodeIdx,
-    ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx> + 't> {
-        Ok(self[idx].children())
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + 't {
+        self[node_idx].children()
     }
 
     #[rustfmt::skip]
