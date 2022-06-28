@@ -141,6 +141,15 @@ where
         Ok(())
     }
 
+    /// Remove all descendant nodes of `self[node_idx]`, but
+    /// not `self[node_idx]` itself.
+    pub fn remove_descendants_of(&mut self, node_idx: NodeIdx) -> TreeResult<()> {
+        for child_idx in self[node_idx].children.clone() {
+            self.remove_subtree(child_idx)?;
+        }
+        Ok(())
+    }
+
     #[rustfmt::skip]
     /// Make `self[subroot_idx]` the last child node of `self[parent_idx]`.
     /// Returns an error if `self[subroot_idx].parent` equals `None`.
@@ -984,6 +993,19 @@ mod tests {
 
         let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
         assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
+        Ok(())
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn remove_descendants_of() -> TreeResult<()> {
+        let mut data = make_data()?;
+        println!("tree 0:\n{}", data.tree);
+        data.tree.remove_descendants_of(NodeIdx(6))?;
+        println!("tree 1:\n{}", data.tree);
+        assert!(data.tree[NodeIdx(6)].children.is_empty());
+        let expected = &[NodeIdx(1), NodeIdx(4), NodeIdx(6)];
+        assert_eq!(&data.tree.root_ref().children, expected);
         Ok(())
     }
 
