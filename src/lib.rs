@@ -240,6 +240,15 @@ where
         self[node_idx].children()
     }
 
+    /// Return an iterator over the descendants of `self[node_idx]` in DFS order.
+    #[inline(always)]
+    pub fn descendants_of<'t>(
+        &'t self,
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + 't {
+        self.dfs(node_idx).filter(move |&didx| didx != node_idx)
+    }
+
     /// Return an iterator over the nodes, in DFS order,
     /// of the subtree rooted in `start_idx`.
     pub fn dfs(
@@ -1051,6 +1060,17 @@ mod tests {
         let children: Vec<_> = data.tree.children_of(node_idx).collect();
         println!("child indices:\n{:?}", children);
         assert_eq!(children, &[NodeIdx(2), NodeIdx(3)]);
+        Ok(())
+    }
+
+    #[test]
+    fn descendants_of() -> TreeResult<()> {
+        let data = make_data()?;
+        println!("tree:\n{}", data.tree);
+        let node_idx = NodeIdx(6);
+        let descendants: Vec<_> = data.tree.descendants_of(node_idx).collect();
+        println!("descendant indices:\n{:?}", descendants);
+        assert_eq!(descendants, &[NodeIdx(7), NodeIdx(8), NodeIdx(9)]);
         Ok(())
     }
 
