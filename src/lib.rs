@@ -217,6 +217,18 @@ where
         }
         ancestors.into_iter()
     }
+
+    /// Return an iterator over the siblings of `self[node_idx]`.
+    #[inline(always)]
+    pub fn siblings_of<'t>(
+        &'t self,
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + 't {
+        let parents_children: &[NodeIdx] = self[node_idx].parent
+            .map(|parent_idx| &*self[parent_idx].children)
+            .unwrap_or_default();
+        parents_children.iter().copied()
+            .filter(move |&cidx| cidx != node_idx)
     }
 
     /// Return an iterator over the children of `self[node_idx]`.
@@ -1017,6 +1029,17 @@ mod tests {
         let ancestors: Vec<_> = data.tree.ancestors_of(node_idx).collect();
         println!("ancestor indices:\n{:?}", ancestors);
         assert_eq!(ancestors, &[NodeIdx(7), NodeIdx(6), NodeIdx(0)]);
+        Ok(())
+    }
+
+    #[test]
+    fn siblings_of() -> TreeResult<()> {
+        let data = make_data()?;
+        println!("tree:\n{}", data.tree);
+        let node_idx = NodeIdx(4);
+        let siblings: Vec<_> = data.tree.siblings_of(node_idx).collect();
+        println!("sibling indices:\n{:?}", siblings);
+        assert_eq!(siblings, &[NodeIdx(1), NodeIdx(6)]);
         Ok(())
     }
 
