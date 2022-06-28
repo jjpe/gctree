@@ -436,11 +436,8 @@ where
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
         for node_idx in self.dfs(NodeIdx::ROOT) {
-            let num_ancestors: usize = self.ancestors_of(node_idx)
-                .unwrap(/*TreeResult*/)
-                .count();
-            for _ in 0..num_ancestors {
-                write!(f, "| ")?; /* no newline */
+            for _ in self.ancestors_of(node_idx) {
+                write!(f, "| ")?; // no newline
             }
             let Node { idx, data, .. } = &self[node_idx];
             writeln!(f, "{idx} {data:?}")?;
