@@ -219,6 +219,7 @@ where
     }
     }
 
+    /// Return an iterator over the children of `self[node_idx]`.
     #[inline(always)]
     pub fn children_of<'t>(
         &'t self,
@@ -1016,6 +1017,17 @@ mod tests {
         let ancestors: Vec<_> = data.tree.ancestors_of(node_idx).collect();
         println!("ancestor indices:\n{:?}", ancestors);
         assert_eq!(ancestors, &[NodeIdx(7), NodeIdx(6), NodeIdx(0)]);
+        Ok(())
+    }
+
+    #[test]
+    fn children_of() -> TreeResult<()> {
+        let data = make_data()?;
+        println!("tree:\n{}", data.tree);
+        let node_idx = NodeIdx(1);
+        let children: Vec<_> = data.tree.children_of(node_idx).collect();
+        println!("child indices:\n{:?}", children);
+        assert_eq!(children, &[NodeIdx(2), NodeIdx(3)]);
         Ok(())
     }
 
