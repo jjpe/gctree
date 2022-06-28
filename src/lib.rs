@@ -202,20 +202,21 @@ where
         Ok(())
     }
 
-    /// Return an iterator over the ancestors of `idx`, starting with
-    /// the parent of `idx` and going toward the root of the tree.
+    /// Return an iterator over the ancestors of `self[node_idx]`, starting
+    /// with the parent of `node_idx` and going toward the root of the tree.
     #[inline(always)]
     pub fn ancestors_of<'t>(
         &'t self,
         node_idx: NodeIdx,
-    ) -> TreeResult<impl DoubleEndedIterator<Item = NodeIdx> + 't> {
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + 't {
         let mut ancestors = vec![];
-        let mut current: NodeIdx = node_idx;
-        while let Some(parent_idx) = self[current].parent {
+        let mut current_idx: NodeIdx = node_idx;
+        while let Some(parent_idx) = self[current_idx].parent {
             ancestors.push(parent_idx);
-            current = parent_idx;
+            current_idx = parent_idx;
         }
-        Ok(ancestors.into_iter())
+        ancestors.into_iter()
+    }
     }
 
     #[inline(always)]
@@ -790,7 +791,6 @@ mod tests {
     struct Data {
         tree: ArenaTree<()>,
         root: NodeIdx,
-        ancestors_order: Vec<NodeIdx>,
         bfs_order: Vec<NodeIdx>,
         dfs_order: Vec<NodeIdx>,
         subtree_bfs_order: Vec<NodeIdx>,
@@ -813,7 +813,6 @@ mod tests {
         Ok(Data {
             tree,
             root,
-            ancestors_order: vec![node20, node2, root],
             bfs_order: vec![
                 root,
                 node0,
@@ -1010,16 +1009,18 @@ mod tests {
     }
 
     #[test]
-    fn ancestors() -> TreeResult<()> {
+    fn ancestors_of() -> TreeResult<()> {
         let data = make_data()?;
-        let node200 = NodeIdx(8);
-        let ancestors: Vec<_> = data.tree.ancestors_of(node200)?.collect();
-        assert_eq!(ancestors, data.ancestors_order);
+        println!("tree:\n{}", data.tree);
+        let node_idx = NodeIdx(8);
+        let ancestors: Vec<_> = data.tree.ancestors_of(node_idx).collect();
+        println!("ancestor indices:\n{:?}", ancestors);
+        assert_eq!(ancestors, &[NodeIdx(7), NodeIdx(6), NodeIdx(0)]);
         Ok(())
     }
 
-    #[rustfmt::skip]
     #[test]
+    #[rustfmt::skip]
     fn move_subtree() -> TreeResult<()> {
         let data = make_data()?;
         let mut tree = data.tree.clone();
