@@ -1,7 +1,7 @@
 use crate::NodeIdx;
 use serde_derive::{Deserialize, Serialize};
 
-pub type TreeResult<T> = Result<T, TreeError>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(
     Clone,
@@ -13,11 +13,10 @@ pub type TreeResult<T> = Result<T, TreeError>;
     Hash,
     Deserialize,
     Serialize,
-    deltoid_derive::Delta,
     displaydoc::Display,
     thiserror::Error,
 )]
-pub enum TreeError {
+pub enum Error {
     /// Expected `tree[node_idx]` to have a parent node
     ParentNotFound { node_idx: NodeIdx },
 }

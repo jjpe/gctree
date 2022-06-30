@@ -4,7 +4,7 @@
 
 mod error;
 
-pub use crate::error::{TreeError, TreeResult};
+pub use crate::error::{Error, Result};
 use deltoid::{
     Apply, Core, Delta, DeltaError, DeltaResult, FromDelta, IntoDelta,
 };
@@ -72,7 +72,7 @@ where
     pub fn new_node(
         &mut self,
         parent_idx: impl Into<Option<NodeIdx>>,
-    ) -> TreeResult<NodeIdx> {
+    ) -> Result<NodeIdx> {
         if let Some(cidx) = self.garbage.pop_front() {
             self[cidx].clear();
             self[cidx].parent = parent_idx.into();
@@ -95,7 +95,7 @@ where
         }
     }
 
-    fn destroy_node(&mut self, node_idx: NodeIdx) -> TreeResult<()> {
+    fn destroy_node(&mut self, node_idx: NodeIdx) -> Result<()> {
         if let Some(parent_idx) = self[node_idx].parent {
             // Filter out the NodeIdx from the parent's child indices
             self[parent_idx].remove_child_idx(node_idx);
@@ -114,7 +114,7 @@ where
         &mut self,
         dst_node_idx: NodeIdx,
         src: &Self,
-    ) -> TreeResult<()> {
+    ) -> Result<()> {
         type SrcTreeIdx = Option<NodeIdx>;
         type DstTreeIdx = NodeIdx;
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
@@ -130,7 +130,7 @@ where
         Ok(())
     }
 
-    pub fn remove_subtree(&mut self, start_idx: NodeIdx) -> TreeResult<()> {
+    pub fn remove_subtree(&mut self, start_idx: NodeIdx) -> Result<()> {
         if self.garbage.contains(&start_idx) {
             return Ok(()); // Don't try to remove garbage
         }
@@ -143,7 +143,7 @@ where
 
     /// Remove all descendant nodes of `self[node_idx]`, but
     /// not `self[node_idx]` itself.
-    pub fn remove_descendants_of(&mut self, node_idx: NodeIdx) -> TreeResult<()> {
+    pub fn remove_descendants_of(&mut self, node_idx: NodeIdx) -> Result<()> {
         for child_idx in self[node_idx].children.clone() {
             self.remove_subtree(child_idx)?;
         }
@@ -162,9 +162,9 @@ where
         //       before allowing `parent_idx` to be `None`:
         // parent_idx: impl Into<Option<NodeIdx>>,
         parent_idx: NodeIdx,
-    ) -> TreeResult<()> {
+    ) -> Result<()> {
         let old_parent_idx = self[subroot_idx].parent
-            .ok_or(TreeError::ParentNotFound { node_idx: subroot_idx })?;
+            .ok_or(Error::ParentNotFound { node_idx: subroot_idx })?;
         self[old_parent_idx].remove_child_idx(subroot_idx);
         self[subroot_idx].parent = parent_idx.into();
         if let Some(parent_idx) = self[subroot_idx].parent {
@@ -181,14 +181,14 @@ where
         &mut self,
         target_idx: NodeIdx,
         subroot_idx: NodeIdx,
-    ) -> TreeResult<()> {
+    ) -> Result<()> {
         let parent_idx = self[target_idx].parent
             // TODO: Remove the `.ok_or()` line below, as well as the
-            //       `TreeError::ParentNotFound` enum variant used
+            //       `Error::ParentNotFound` enum variant used
             //       in it, after adding multiple root support in
             //       ArenaTree as well as in the self.move_subtree()
             //       method definition above:
-            .ok_or(TreeError::ParentNotFound { node_idx: target_idx })?
+            .ok_or(Error::ParentNotFound { node_idx: target_idx })?
             ;
         self.move_subtree(subroot_idx, parent_idx)?;
         // Rather than having the ordinal number of `self[target_idx]`,
@@ -451,7 +451,10 @@ impl<D: Serialize> Serialize for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq + Serialize,
 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S
+    ) -> std::result::Result<S::Ok, S::Error> {
         const NUM_FIELDS: usize = 2;
         let mut state = serializer.serialize_struct("ArenaTree", NUM_FIELDS)?;
         state.serialize_field("nodes", &self.nodes)?;
@@ -465,7 +468,9 @@ impl<'de, D> Deserialize<'de> for ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
 {
-    fn deserialize<DE: Deserializer<'de>>(d: DE) -> Result<Self, DE::Error> {
+    fn deserialize<DE: Deserializer<'de>>(
+        d: DE
+    ) -> std::result::Result<Self, DE::Error> {
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
@@ -486,7 +491,10 @@ where
                 f.write_str("struct ArenaTree<D>")
             }
 
-            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            fn visit_seq<V>(
+                self,
+                mut seq: V
+            ) -> std::result::Result<Self::Value, V::Error>
             where
                 V: SeqAccess<'de>,
             {
@@ -499,7 +507,10 @@ where
                 Ok(ArenaTree { nodes, garbage })
             }
 
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            fn visit_map<A>(
+                self,
+                mut map: A
+            ) -> std::result::Result<Self::Value, A::Error>
             where
                 A: MapAccess<'de>,
             {
@@ -662,7 +673,6 @@ impl std::ops::Sub<Self> for NodeCount {
     PartialOrd,
     Ord,
     Hash,
-    deltoid_derive::Delta,
     Deserialize,
     Serialize,
 )]
@@ -771,7 +781,6 @@ impl<D: Debug> fmt::Debug for Node<D> {
     PartialOrd,
     Ord,
     Hash,
-    deltoid_derive::Delta,
     Deserialize,
     Serialize,
 )]
@@ -817,7 +826,7 @@ mod tests {
     }
 
     #[rustfmt::skip]
-    fn make_data() -> TreeResult<Data> {
+    fn make_data() -> Result<Data> {
         let mut tree: ArenaTree<_> = ArenaTree::new();
         let root: NodeIdx = tree.new_node(None)?;
         let node0: NodeIdx = tree.new_node(root)?;
@@ -878,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn dfs_traversal() -> TreeResult<()> {
+    fn dfs_traversal() -> Result<()> {
         let data = make_data()?;
         let dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
         assert_eq!(dfs_order, data.dfs_order);
@@ -886,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn bfs_traversal() -> TreeResult<()> {
+    fn bfs_traversal() -> Result<()> {
         let data = make_data()?;
         let bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(bfs_order, data.bfs_order);
@@ -894,7 +903,7 @@ mod tests {
     }
 
     #[test]
-    fn add_subtree() -> TreeResult<()> {
+    fn add_subtree() -> Result<()> {
         let mut tree: ArenaTree<String> = ArenaTree::new();
         let root: NodeIdx = tree.new_node(None)?;
         let node0: NodeIdx = tree.new_node(root)?;
@@ -979,7 +988,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_subtree() -> TreeResult<()> {
+    fn remove_subtree() -> Result<()> {
         let mut data = make_data()?;
         let node0 = NodeIdx(1);
         data.tree.remove_subtree(node0)?;
@@ -991,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_subtree_multiply() -> TreeResult<()> {
+    fn remove_subtree_multiply() -> Result<()> {
         let mut data = make_data()?;
         let node0 = NodeIdx(1);
 
@@ -1016,7 +1025,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn remove_descendants_of() -> TreeResult<()> {
+    fn remove_descendants_of() -> Result<()> {
         let mut data = make_data()?;
         println!("tree 0:\n{}", data.tree);
         data.tree.remove_descendants_of(NodeIdx(6))?;
@@ -1028,7 +1037,7 @@ mod tests {
     }
 
     #[test]
-    fn ancestors_of() -> TreeResult<()> {
+    fn ancestors_of() -> Result<()> {
         let data = make_data()?;
         println!("tree:\n{}", data.tree);
         let node_idx = NodeIdx(8);
@@ -1039,7 +1048,7 @@ mod tests {
     }
 
     #[test]
-    fn siblings_of() -> TreeResult<()> {
+    fn siblings_of() -> Result<()> {
         let data = make_data()?;
         println!("tree:\n{}", data.tree);
         let node_idx = NodeIdx(4);
@@ -1050,7 +1059,7 @@ mod tests {
     }
 
     #[test]
-    fn children_of() -> TreeResult<()> {
+    fn children_of() -> Result<()> {
         let data = make_data()?;
         println!("tree:\n{}", data.tree);
         let node_idx = NodeIdx(1);
@@ -1061,7 +1070,7 @@ mod tests {
     }
 
     #[test]
-    fn descendants_of() -> TreeResult<()> {
+    fn descendants_of() -> Result<()> {
         let data = make_data()?;
         println!("tree:\n{}", data.tree);
         let node_idx = NodeIdx(6);
@@ -1073,7 +1082,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn move_subtree() -> TreeResult<()> {
+    fn move_subtree() -> Result<()> {
         let data = make_data()?;
         let mut tree = data.tree.clone();
 
@@ -1113,7 +1122,7 @@ mod tests {
 
     #[rustfmt::skip]
     #[test]
-    fn replace_subtree() -> TreeResult<()> {
+    fn replace_subtree() -> Result<()> {
         let data = make_data()?;
         let mut tree = data.tree.clone();
         println!("0 tree:\n\n{tree}\n{tree:#?}\n");
