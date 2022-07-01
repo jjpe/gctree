@@ -22,6 +22,7 @@ pub struct ArenaTree<D: Clone + Debug + Default + PartialEq> {
     garbage: VecDeque<NodeIdx>,
 }
 
+#[allow(unused)]
 impl<D> ArenaTree<D>
 where
     D: Clone + Debug + Default + PartialEq,
