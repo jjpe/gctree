@@ -3,10 +3,10 @@
 #![forbid(unsafe_code)]
 
 pub mod dag;
-mod error;
-mod node_count;
-mod node_idx;
-mod tree;
+pub mod error;
+pub mod node_count;
+pub mod node_idx;
+pub mod tree;
 
 #[rustfmt::skip]
 pub use crate::{
