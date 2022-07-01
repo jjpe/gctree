@@ -2,6 +2,7 @@
 //! datastructure that can be newtyped for higher-level trees.
 #![forbid(unsafe_code)]
 
+pub mod dag;
 mod error;
 mod node_count;
 mod node_idx;
