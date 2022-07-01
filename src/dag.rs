@@ -131,7 +131,7 @@ impl<D> ArenaDag<D> {
     }
 
     #[inline]
-    fn ensure_node_is_branch(&self, node_idx: NodeIdx) -> Result<()> {
+    pub fn ensure_node_is_branch(&self, node_idx: NodeIdx) -> Result<()> {
         if self[node_idx].is_branch_node() {
             Ok(())
         } else {
@@ -140,7 +140,7 @@ impl<D> ArenaDag<D> {
     }
 
     #[inline]
-    fn ensure_node_is_leaf(&self, node_idx: NodeIdx) -> Result<()> {
+    pub fn ensure_node_is_leaf(&self, node_idx: NodeIdx) -> Result<()> {
         if self[node_idx].is_leaf_node() {
             Ok(())
         } else {
@@ -149,7 +149,7 @@ impl<D> ArenaDag<D> {
     }
 
     #[inline]
-    fn ensure_node_is_root(&self, node_idx: NodeIdx) -> Result<()> {
+    pub fn ensure_node_is_root(&self, node_idx: NodeIdx) -> Result<()> {
         if self[node_idx].is_root_node() {
             Ok(())
         } else {
@@ -160,7 +160,7 @@ impl<D> ArenaDag<D> {
     /// Ensure that `self` contains no cycles
     // TODO: Make this method incremental. Currently the method traverses
     //       the entire graph, which can quickly become expensive.
-    fn ensure_no_cycles(&self) -> Result<()> {
+    pub fn ensure_no_cycles(&self) -> Result<()> {
         macro_rules! set {
             ($($elt:expr),* $(,)?) => {{
                 let mut set = std::collections::HashSet::new();
