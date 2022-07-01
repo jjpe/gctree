@@ -7,4 +7,8 @@ mod node_count;
 mod node_idx;
 mod tree;
 
-pub use crate::{node_count::NodeCount, node_idx::NodeIdx};
+#[rustfmt::skip]
+pub use crate::{
+    node_count::NodeCount,
+    node_idx::NodeIdx
+};
