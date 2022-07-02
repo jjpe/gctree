@@ -94,17 +94,6 @@ impl<D> ArenaDag<D> {
         Ok(node_idx)
     }
 
-    /// Remove the sub-DAG rooted in `start_idx`.
-    pub fn remove_subdag(&mut self, start_idx: NodeIdx) -> Result<()>
-    where
-        D: Default
-    {
-        for desc_idx in self.descendants_of(start_idx).rev() {
-            self.recycle_node(desc_idx)?;
-        }
-        Ok(())
-    }
-
     fn alloc_node(&mut self) -> NodeIdx
     where
         D: Default,
@@ -114,6 +103,17 @@ impl<D> ArenaDag<D> {
             self.nodes.push(Node::new(node_idx, D::default()));
             node_idx
         })
+    }
+
+    /// Remove the sub-DAG rooted in `start_idx`.
+    pub fn remove_subdag(&mut self, start_idx: NodeIdx) -> Result<()>
+    where
+        D: Default
+    {
+        for desc_idx in self.dfs(start_idx).rev() {
+            self.recycle_node(desc_idx)?;
+        }
+        Ok(())
     }
 
     fn recycle_node(&mut self, node_idx: NodeIdx) -> Result<()>
