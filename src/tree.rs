@@ -124,7 +124,7 @@ where
         let dst = self;
         for src_node_idx in src.dfs(NodeIdx::ROOT) {
             let src_parent_idx = src[src_node_idx].parent;
-            let dst_parent_idx = map.get(&src_parent_idx).map(|&idx| idx);
+            let dst_parent_idx = map.get(&src_parent_idx).copied();
             let dst_node_idx = dst.new_node(dst_parent_idx)?;
             dst[dst_node_idx].data = src[src_node_idx].data.clone();
             map.insert(Some(src_node_idx), dst_node_idx);
@@ -363,7 +363,7 @@ where
             if let Some(Ordering::Greater | Ordering::Less) = child_count_cmp {
                 return child_count_cmp;
             }
-            let data_cmp = sdata.partial_cmp(&odata);
+            let data_cmp = sdata.partial_cmp(odata);
             if let Some(Ordering::Greater | Ordering::Less) = data_cmp {
                 return data_cmp;
             }
@@ -402,7 +402,7 @@ where
             if let Ordering::Greater | Ordering::Less = child_count_cmp {
                 return child_count_cmp;
             }
-            let data_cmp = sdata.cmp(&odata);
+            let data_cmp = sdata.cmp(odata);
             if let Ordering::Greater | Ordering::Less = data_cmp {
                 return data_cmp;
             }
@@ -568,7 +568,7 @@ where
         match delta.0 {
             Some(d) => Ok(d),
             None => Err(DeltaError::FailedToApplyDelta {
-                reason: format!("Expected a `ArenaTreeDelta(Some(_))` value"),
+                reason: "Expected a `ArenaTreeDelta(Some(_))` value".to_string(),
             }),
         }
     }
@@ -601,7 +601,7 @@ where
         match delta.0 {
             Some(d) => Ok(d),
             None => Err(DeltaError::FailedToConvertFromDelta {
-                reason: format!("Expected a `ArenaTreeDelta(Some(_))` value"),
+                reason: "Expected a `ArenaTreeDelta(Some(_))` value".to_string(),
             }),
         }
     }
@@ -656,7 +656,7 @@ pub struct Node<D> {
 impl<D> Node<D> {
     #[inline(always)]
     pub fn children(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.children.iter().map(|&child_idx| child_idx)
+        self.children.iter().copied()
     }
 
     pub fn count_children(&self) -> usize {
@@ -1021,7 +1021,7 @@ mod tests {
         // Make `tree[subroot_idx]` a child of its grandparent,
         // i.e. move the subtree back:
         tree.move_subtree(subroot_idx, parent_idx)?;
-        let expected = data.tree.clone();
+        let expected = data.tree;
         assert_eq!(
             tree, expected,
             "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
@@ -1034,7 +1034,7 @@ mod tests {
     #[test]
     fn replace_subtree() -> Result<()> {
         let data = make_data()?;
-        let mut tree = data.tree.clone();
+        let mut tree = data.tree;
         println!("0 tree:\n\n{tree}\n{tree:#?}\n");
 
         // Replace `self[target_idx]` with `self[subroot_idx]`:
