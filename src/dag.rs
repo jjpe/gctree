@@ -65,6 +65,14 @@ impl<D> ArenaDag<D> {
         self.roots.iter().copied()
     }
 
+    #[inline(always)]
+    pub fn add_root(&mut self) -> Result<NodeIdx>
+    where
+        D: Default
+    {
+        self.add_node([])
+    }
+
     /// Add a node to the graph
     pub fn add_node(
         &mut self,
