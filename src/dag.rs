@@ -66,22 +66,17 @@ impl<D> ArenaDag<D> {
     }
 
     #[inline(always)]
-    pub fn add_root(&mut self) -> Result<NodeIdx>
-    where
-        D: Default
-    {
-        self.add_node([])
+    pub fn add_root(&mut self, data: D) -> Result<NodeIdx> {
+        self.add_node(data, [])
     }
 
     /// Add a node to the graph
     pub fn add_node(
         &mut self,
+        data: D,
         parent_idxs: impl IntoIterator<Item = NodeIdx>,
-    ) -> Result<NodeIdx>
-    where
-        D: Default
-    {
-        let node_idx = self.alloc_node();
+    ) -> Result<NodeIdx> {
+        let node_idx = self.alloc_node(data);
         // Fix up the parents of the allocated node:
         self[node_idx].add_parents(parent_idxs);
         // If it's a root node, register that:
@@ -102,32 +97,23 @@ impl<D> ArenaDag<D> {
         Ok(node_idx)
     }
 
-    fn alloc_node(&mut self) -> NodeIdx
-    where
-        D: Default,
-    {
+    fn alloc_node(&mut self, data: D) -> NodeIdx {
         self.garbage.pop_front().unwrap_or_else(|| {
             let node_idx = NodeIdx::from(self.nodes.len());
-            self.nodes.push(Node::new(node_idx, D::default()));
+            self.nodes.push(Node::new(node_idx, data));
             node_idx
         })
     }
 
     /// Remove the sub-DAG rooted in `start_idx`.
-    pub fn remove_subdag(&mut self, start_idx: NodeIdx) -> Result<()>
-    where
-        D: Default
-    {
+    pub fn remove_subdag(&mut self, start_idx: NodeIdx) -> Result<()> {
         for desc_idx in self.dfs(start_idx).rev() {
             self.recycle_node(desc_idx)?;
         }
         Ok(())
     }
 
-    fn recycle_node(&mut self, node_idx: NodeIdx) -> Result<()>
-    where
-        D: Default,
-    {
+    fn recycle_node(&mut self, node_idx: NodeIdx) -> Result<()> {
         self.ensure_node_is_leaf(node_idx)?;
         // Filter out the `node_idx` from each parents' children:
         for parent_idx in self[node_idx].parents.clone() {
@@ -263,13 +249,12 @@ impl<D> ArenaDag<D> {
         child_idxs: I,
     ) -> Result<NodeIdx>
     where
-        D: Default,
         I: IntoIterator<Item = NodeIdx>,  // TODO: perhaps this can be dropped
         I::IntoIter: Clone                // TODO: perhaps this can be dropped
     {
         let child_idxs = child_idxs.into_iter();
         self.ensure_roots(child_idxs.clone())?;
-        let parent_idx = self.add_root()?;
+        let parent_idx = self.add_root(parent_data)?;
         for child_idx in child_idxs {
             self[parent_idx].add_children([child_idx]);
             self[child_idx].add_parents([parent_idx])
@@ -345,14 +330,13 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    fn clear(&mut self)
-    where
-        D: Default,
-    {
+    fn clear(&mut self) {
         self.layer = 0;
         self.parents.clear();
         self.children.clear();
-        self.data = D::default();
+        // Don't change `self.data` - changing it to some dummy value would
+        // require a `where D: Default` bound on this method, which would
+        // mean that GC could only take place for values of such types `D`.
     }
 
     #[rustfmt::skip]
@@ -477,21 +461,17 @@ mod tests {
 
     #[test]
     fn merge_subdags() -> Result<()> {
-        #[doc = ""]
-        #[derive(Default, Debug, displaydoc::Display)]
-        struct Dataless;
-
-        let mut dag = ArenaDag::<Dataless>::new();
+        let mut dag = ArenaDag::<&str>::new();
         // subtree 0:
-        let  root0_idx = dag.add_node([/*root: no parents*/])?;
-        let child1_idx = dag.add_node([root0_idx])?;
-        let child2_idx = dag.add_node([root0_idx])?;
+        let  root0_idx = dag.add_node("Root", [/*root: no parents*/])?;
+        let child1_idx = dag.add_node("", [root0_idx])?;
+        let child2_idx = dag.add_node("", [root0_idx])?;
         // subtree 1:
-        let  root3_idx = dag.add_node([/*root: no parents*/])?;
-        let child4_idx = dag.add_node([root3_idx])?;
-        let child5_idx = dag.add_node([root3_idx])?;
-        let child6_idx = dag.add_node([root3_idx])?;
-        dag.merge_subdags(Dataless, [root0_idx, root3_idx])?;
+        let  root3_idx = dag.add_node("Root", [/*root: no parents*/])?;
+        let child4_idx = dag.add_node("", [root3_idx])?;
+        let child5_idx = dag.add_node("", [root3_idx])?;
+        let child6_idx = dag.add_node("", [root3_idx])?;
+        dag.merge_subdags("", [root0_idx, root3_idx])?;
 
         let graph: Graph = dag.visualize()?;
         super::viz::write_to_dot_file(graph.clone(), "/tmp/example.dot");
