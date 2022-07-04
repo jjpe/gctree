@@ -94,7 +94,7 @@ impl<D> ArenaDag<D> {
         }
         // The new node is assigned to one layer after its furthest parent:
         self[node_idx].layer = self[node_idx].parents.iter()
-            .map(|&parent_idx| self[parent_idx].layer)
+            .map(|&parent_idx| 1 + self[parent_idx].layer)
             .max()
             .unwrap_or(0);
         // The new node shouldn't have any children:
