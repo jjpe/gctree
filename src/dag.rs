@@ -251,6 +251,45 @@ impl<D> ArenaDag<D> {
     pub fn is_reachable(&self, src_idx: NodeIdx, dst_idx: NodeIdx) -> bool {
         self.bfs(src_idx).any(|idx| idx == dst_idx)
     }
+
+    /// Merge sub-DAGs allocated in `self` under a newly added parent node.
+    /// The child nodes need to be root nodes before merging i.e. they must
+    /// not have any parents. During merging, they're added to the parent
+    /// in iteration order.
+    /// The parent node becomes a new root node, and has the padded `parent_data`.
+    pub fn merge_subdags<I>(
+        &mut self,
+        parent_data: D,
+        child_idxs: I,
+    ) -> Result<NodeIdx>
+    where
+        D: Default,
+        I: IntoIterator<Item = NodeIdx>,  // TODO: perhaps this can be dropped
+        I::IntoIter: Clone                // TODO: perhaps this can be dropped
+    {
+        let child_idxs = child_idxs.into_iter();
+        self.ensure_roots(child_idxs.clone())?;
+        let parent_idx = self.add_root()?;
+        for child_idx in child_idxs {
+            self[parent_idx].add_children([child_idx]);
+            self[child_idx].add_parents([parent_idx])
+        }
+        Ok(parent_idx)
+    }
+
+    /// Ensure that the nodes corresponding to the
+    /// passed `node_idxs` are root nodes.
+    fn ensure_roots(
+        &mut self,
+        node_idxs: impl IntoIterator<Item = NodeIdx>
+    ) -> Result<()> {
+        for node_idx in node_idxs {
+            if !self[node_idx].is_root_node() {
+                return Err(Error::ExpectedRootNode(node_idx));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<D> std::ops::Index<NodeIdx> for ArenaDag<D> {
@@ -435,6 +474,31 @@ impl<D> Node<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merge_subdags() -> Result<()> {
+        #[doc = ""]
+        #[derive(Default, Debug, displaydoc::Display)]
+        struct Dataless;
+
+        let mut dag = ArenaDag::<Dataless>::new();
+        // subtree 0:
+        let  root0_idx = dag.add_node([/*root: no parents*/])?;
+        let child1_idx = dag.add_node([root0_idx])?;
+        let child2_idx = dag.add_node([root0_idx])?;
+        // subtree 1:
+        let  root3_idx = dag.add_node([/*root: no parents*/])?;
+        let child4_idx = dag.add_node([root3_idx])?;
+        let child5_idx = dag.add_node([root3_idx])?;
+        let child6_idx = dag.add_node([root3_idx])?;
+        dag.merge_subdags(Dataless, [root0_idx, root3_idx])?;
+
+        let graph: Graph = dag.visualize()?;
+        super::viz::write_to_dot_file(graph.clone(), "/tmp/example.dot");
+        super::viz::write_to_svg_file(graph, "/tmp/example.svg");
+
+        Ok(())
+    }
 
     #[test]
     fn foo() -> Result<()> {
