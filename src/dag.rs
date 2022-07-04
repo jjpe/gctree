@@ -249,7 +249,7 @@ impl<D> ArenaDag<D> {
     /// exists i.e. iff. `dst` is reachable from `src`.
     #[inline]
     pub fn is_reachable(&self, src_idx: NodeIdx, dst_idx: NodeIdx) -> bool {
-        self.bfs(src_idx).find(|&idx| idx == dst_idx).is_some()
+        self.bfs(src_idx).any(|idx| idx == dst_idx)
     }
 }
 
