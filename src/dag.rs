@@ -135,7 +135,7 @@ impl<D> ArenaDag<D> {
         if self[node_idx].is_branch_node() {
             Ok(())
         } else {
-            Err(Error::NotABranch(node_idx))
+            Err(Error::ExpectedBranchNode(node_idx))
         }
     }
 
@@ -144,7 +144,7 @@ impl<D> ArenaDag<D> {
         if self[node_idx].is_leaf_node() {
             Ok(())
         } else {
-            Err(Error::NotALeaf(node_idx))
+            Err(Error::ExpectedLeafNode(node_idx))
         }
     }
 
@@ -153,7 +153,7 @@ impl<D> ArenaDag<D> {
         if self[node_idx].is_root_node() {
             Ok(())
         } else {
-            Err(Error::NotARoot(node_idx))
+            Err(Error::ExpectedRootNode(node_idx))
         }
     }
 

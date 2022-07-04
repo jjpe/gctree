@@ -24,11 +24,11 @@ pub enum Error {
     /// Detected a cycle: {path:?}
     CycleDetected { path: Vec<NodeIdx> },
     /// Expected Node {0} to be a branch node
-    NotABranch(NodeIdx),
+    ExpectedBranchNode(NodeIdx),
     /// Expected Node {0} to be a leaf node
-    NotALeaf(NodeIdx),
+    ExpectedLeafNode(NodeIdx),
     /// Expected Node {0} to be a root node
-    NotARoot(NodeIdx),
+    ExpectedRootNode(NodeIdx),
     /// Expected `tree[node_idx]` to have a parent node
     ParentNotFound { node_idx: NodeIdx },
 }
