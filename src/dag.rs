@@ -8,7 +8,7 @@ use crate::{
 };
 use std::collections::{HashSet, VecDeque};
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// An arena-allocated Directed Acyclic Graph (DAG) implementation.
 pub struct ArenaDag<D> {
     /// Root nodes
