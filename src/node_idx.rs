@@ -16,7 +16,7 @@
 pub struct NodeIdx(pub(crate) usize);
 
 impl NodeIdx {
-    pub const ROOT: Self = Self(0);
+    pub const TREE_ROOT: Self = Self(0);
 }
 
 impl std::fmt::Debug for NodeIdx {

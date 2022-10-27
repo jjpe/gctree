@@ -62,13 +62,13 @@ where
 
     #[inline(always)]
     pub fn root_ref(&self) -> &Node<D> {
-        &self[NodeIdx::ROOT]
+        &self[NodeIdx::TREE_ROOT]
     }
 
     #[allow(unused)]
     #[inline(always)]
     pub fn root_mut(&mut self) -> &mut Node<D> {
-        &mut self[NodeIdx::ROOT]
+        &mut self[NodeIdx::TREE_ROOT]
     }
 
     pub fn new_node(
@@ -122,7 +122,7 @@ where
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
         let dst = self;
-        for src_node_idx in src.dfs(NodeIdx::ROOT) {
+        for src_node_idx in src.dfs(NodeIdx::TREE_ROOT) {
             let src_parent_idx = src[src_node_idx].parent;
             let dst_parent_idx = map.get(&src_parent_idx).copied();
             let dst_node_idx = dst.new_node(dst_parent_idx)?;
@@ -302,8 +302,8 @@ where
         if self.logical_size() != other.logical_size() {
             return false;
         }
-        let snode_iter = self.dfs(NodeIdx::ROOT);
-        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let snode_iter = self.dfs(NodeIdx::TREE_ROOT);
+        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
             map.insert(snode_idx, onode_idx);
@@ -346,8 +346,8 @@ where
         if let Some(Ordering::Greater | Ordering::Less) = size_cmp {
             return size_cmp;
         }
-        let snode_iter = self.dfs(NodeIdx::ROOT);
-        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let snode_iter = self.dfs(NodeIdx::TREE_ROOT);
+        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
             map.insert(snode_idx, onode_idx);
@@ -385,8 +385,8 @@ where
         if let Ordering::Greater | Ordering::Less = size_cmp {
             return size_cmp;
         }
-        let snode_iter =  self.dfs(NodeIdx::ROOT);
-        let onode_iter = other.dfs(NodeIdx::ROOT);
+        let snode_iter =  self.dfs(NodeIdx::TREE_ROOT);
+        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
             map.insert(snode_idx, onode_idx);
@@ -439,7 +439,7 @@ where
         // NOTE: This loop is `O(D * N)`, where:
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
-        for node_idx in self.dfs(NodeIdx::ROOT) {
+        for node_idx in self.dfs(NodeIdx::TREE_ROOT) {
             for _ in self.ancestors_of(node_idx) {
                 write!(f, "| ")?; // no newline
             }
