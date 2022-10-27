@@ -534,12 +534,7 @@ mod tests {
 
         assert!(eq(&dag, &expected), "{dag:#?}\n!=\n{expected:#?}");
 
-        Ok(())
-    }
 
-    #[test]
-    fn foo() -> Result<()> {
-        todo!(); // TODO
 
         Ok(())
     }
