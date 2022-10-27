@@ -366,7 +366,7 @@ impl<D> Node<D> {
     pub fn is_branch_node(&self) -> bool { !self.is_leaf_node() }
 
     #[inline(always)]
-    fn add_parents(
+    pub fn add_parents(
         &mut self,
         parent_idxs: impl IntoIterator<Item = NodeIdx>
     ) {
@@ -396,7 +396,7 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    fn add_children(
+    pub fn add_children(
         &mut self,
         child_idxs: impl IntoIterator<Item = NodeIdx>
     ) {
