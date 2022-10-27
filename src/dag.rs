@@ -252,26 +252,34 @@ impl<D> ArenaDag<D> {
         self.bfs(src_idx).any(|idx| idx == dst_idx)
     }
 
-    /// Merge sub-DAGs allocated in `self` under a newly added parent node.
-    /// The child nodes need to be root nodes before merging i.e. they must
-    /// not have any parents. During merging, they're added to the parent
-    /// in iteration order.
-    /// The parent node becomes a new root node, and has the padded `parent_data`.
+    /// Make the nodes identified by `root_idxs` (i.e. the root nodes of
+    /// sub-DAGs allocated in `self`) the children of a newly added parent node
+    /// carrying `data`, which becomes a new root node instead of its children.
+    /// The children are added to the parent in iteration order.
+    /// Return the parent's `NodeIdx`.
     pub fn merge_subdags<I>(
         &mut self,
-        parent_data: D,
-        child_idxs: I,
+        data: D,
+        root_idxs: I,
     ) -> Result<NodeIdx>
     where
-        I: IntoIterator<Item = NodeIdx>,  // TODO: perhaps this can be dropped
-        I::IntoIter: Clone                // TODO: perhaps this can be dropped
+        I: IntoIterator<Item = NodeIdx>,
+        I::IntoIter: Clone
     {
-        let child_idxs = child_idxs.into_iter();
-        self.ensure_roots(child_idxs.clone())?;
-        let parent_idx = self.add_root(parent_data)?;
-        for child_idx in child_idxs {
+        let child_idxs = root_idxs.into_iter();
+        // Verify "rootness" *BEFORE* allocating a new parent root node:
+        for child_idx in child_idxs.clone() {
+            self.ensure_node_is_root(child_idx)?;
+        }
+        let parent_idx = self.add_root(data)?;
+        for child_idx in child_idxs.clone() { // Update parent-child links
             self[parent_idx].add_children([child_idx]);
-            self[child_idx].add_parents([parent_idx])
+            self[child_idx].add_parents([parent_idx]);
+        }
+        self.remove_roots(child_idxs.collect());
+        // Increment the layer of all descendants of the new root:
+        for desc_idx in self.dfs(parent_idx).filter(|&idx| idx != parent_idx) {
+            self[desc_idx].layer += 1;
         }
         Ok(parent_idx)
     }
@@ -477,19 +485,51 @@ mod tests {
     fn merge_subdags() -> Result<()> {
         let mut dag = ArenaDag::<&str>::new();
         // subtree 0:
-        let  root0_idx = dag.add_node("Root", [/*root: no parents*/])?;
-        let child1_idx = dag.add_node("", [root0_idx])?;
-        let child2_idx = dag.add_node("", [root0_idx])?;
+        let  root0_idx = dag.add_node("Old Root", [/*no parents*/])?;
+        let child1_idx = dag.add_node("Child 1", [root0_idx])?;
+        let child2_idx = dag.add_node("Child 2", [root0_idx])?;
         // subtree 1:
-        let  root3_idx = dag.add_node("Root", [/*root: no parents*/])?;
-        let child4_idx = dag.add_node("", [root3_idx])?;
-        let child5_idx = dag.add_node("", [root3_idx])?;
-        let child6_idx = dag.add_node("", [root3_idx])?;
-        dag.merge_subdags("", [root0_idx, root3_idx])?;
+        let  root3_idx = dag.add_node("Old Root", [/*no parents*/])?;
+        let child4_idx = dag.add_node("Child 4", [root3_idx])?;
+        let child5_idx = dag.add_node("Child 5", [root3_idx])?;
+        let child6_idx = dag.add_node("Child 6", [root3_idx])?;
+        dag.merge_subdags("New Root", [root0_idx, root3_idx])?;
 
-        let graph: Graph = dag.visualize()?;
-        super::viz::write_to_dot_file(graph.clone(), "/tmp/example.dot");
-        super::viz::write_to_svg_file(graph, "/tmp/example.svg");
+        let mut expected = ArenaDag::<&str>::new();
+        let     root_idx = expected.add_node("New Root", [/*no parents*/])?;
+        // subtree 0:
+        let   child0_idx = expected.add_node("Old Root", [root_idx])?;
+        let gchild01_idx = expected.add_node("Child 1", [child0_idx])?;
+        let gchild02_idx = expected.add_node("Child 2", [child0_idx])?;
+        // subtree 1:
+        let   child1_idx = expected.add_node("Old Root", [root_idx])?;
+        let gchild10_idx = expected.add_node("Child 4", [child1_idx])?;
+        let gchild11_idx = expected.add_node("Child 5", [child1_idx])?;
+        let gchild12_idx = expected.add_node("Child 6", [child1_idx])?;
+
+        /// Return true iff. `l` and `r` are structurally equivalent
+        /// in terms of their data.
+        fn equivalent<D>(l: &ArenaDag<D>, r: &ArenaDag<D>) -> bool
+        where
+            D: Eq
+        {
+            if l.roots.len() != r.roots.len() {
+                return false;
+            }
+            if l.logical_size() != r.logical_size() {
+                return false;
+            }
+            for (lroot, rroot) in l.roots_iter().zip(r.roots_iter()) {
+                for (lidx, ridx) in l.dfs(lroot).zip(r.dfs(rroot)) {
+                    if l[lidx].data != r[ridx].data {
+                        return false;
+                    }
+                }
+            }
+            true
+        }
+
+        assert!(equivalent(&dag, &expected), "{dag:#?}\n!=\n{expected:#?}");
 
         Ok(())
     }
