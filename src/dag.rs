@@ -508,8 +508,11 @@ mod tests {
         let gchild12_idx = expected.add_node("Child 6", [child1_idx])?;
 
         /// Return true iff. `l` and `r` are structurally equivalent
-        /// in terms of their data.
-        fn equivalent<D>(l: &ArenaDag<D>, r: &ArenaDag<D>) -> bool
+        /// in terms of the data of their nodes.
+        /// In particular this means that the `NodeIdx`s in each `ArenaDag<D>`
+        /// are not compared against one another, only the data of the nodes
+        /// that those `NodeIdx`s point to.
+        fn eq<D>(l: &ArenaDag<D>, r: &ArenaDag<D>) -> bool
         where
             D: Eq
         {
@@ -529,7 +532,7 @@ mod tests {
             true
         }
 
-        assert!(equivalent(&dag, &expected), "{dag:#?}\n!=\n{expected:#?}");
+        assert!(eq(&dag, &expected), "{dag:#?}\n!=\n{expected:#?}");
 
         Ok(())
     }
