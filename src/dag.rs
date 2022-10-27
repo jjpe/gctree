@@ -61,6 +61,20 @@ impl<D> ArenaDag<D> {
     }
 
     #[inline(always)]
+    pub fn roots_mut(&mut self) -> &mut VecDeque<NodeIdx> {
+        &mut self.roots
+    }
+
+    /// Remove `root_ids` from `self.roots`.
+    /// Do not remove the actual nodes themselves.
+    #[inline(always)]
+    pub fn remove_roots(&mut self, root_idxs: HashSet<NodeIdx>) {
+        self.roots = self.roots.drain(..)
+            .filter(|idx| !root_idxs.contains(&idx))
+            .collect();
+    }
+
+    #[inline(always)]
     pub fn roots_iter(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
         self.roots.iter().copied()
     }
