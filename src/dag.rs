@@ -390,7 +390,7 @@ impl<D> Node<D> {
     /// `parent_idx`, this fn Has no effect.
     #[inline]
     #[rustfmt::skip]
-    fn remove_parents(
+    pub fn remove_parents(
         &mut self,
         parent_idxs: impl IntoIterator<Item = NodeIdx>
     ) {
