@@ -165,40 +165,40 @@ impl<D> ArenaDag<D> {
         }
     }
 
-    /// Ensure that `self` contains no cycles
-    // TODO: Make this method incremental. Currently the method traverses
-    //       the entire graph, which can quickly become expensive.
-    pub fn ensure_no_cycles(&self) -> Result<()> {
-        macro_rules! set {
-            ($($elt:expr),* $(,)?) => {{
-                let mut set = std::collections::HashSet::new();
-                $(
-                    set.insert($elt);
-                )*;
-                set
-            }}
-        }
+    // /// Ensure that `self` contains no cycles
+    // // TODO: Make this method incremental. Currently the method traverses
+    // //       the entire graph, which can quickly become expensive.
+    // pub fn ensure_no_cycles(&self) -> Result<()> {
+    //     macro_rules! set {
+    //         ($($elt:expr),* $(,)?) => {{
+    //             let mut set = std::collections::HashSet::new();
+    //             $(
+    //                 set.insert($elt);
+    //             )*;
+    //             set
+    //         }}
+    //     }
 
-        let mut path: Vec<NodeIdx> = vec![
-            // TODO
-        ];
+    //     let mut path: Vec<NodeIdx> = vec![
+    //         // TODO
+    //     ];
 
-        let mut reached = <Vec<HashSet<_>>>::with_capacity(self.roots().len());
-        for (i, &root_idx) in self.roots().iter().enumerate() {
-            reached[i] = set!{root_idx};
-            for node_idx in self.bfs(root_idx).filter(|&idx| idx != root_idx) {
-                // if self[node_idx].parents.contains()
+    //     let mut reached = <Vec<HashSet<_>>>::with_capacity(self.roots().len());
+    //     for (i, &root_idx) in self.roots().iter().enumerate() {
+    //         reached[i] = set!{root_idx};
+    //         for node_idx in self.bfs(root_idx).filter(|&idx| idx != root_idx) {
+    //             // if self[node_idx].parents.contains()
 
-                if self.roots().contains(&node_idx) {
-                    return Err(Error::CycleDetected { path });
-                }
+    //             if self.roots().contains(&node_idx) {
+    //                 return Err(Error::CycleDetected { path });
+    //             }
 
-            }
-        }
+    //         }
+    //     }
 
-        // todo!("ArenaDag::ensure_no_cycles()") // TODO
-        Ok(())
-    }
+    //     // todo!("ArenaDag::ensure_no_cycles()") // TODO
+    //     Ok(())
+    // }
 
     /// Return an iterator over the nodes, in DFS order,
     /// of each of the sub-GSS's rooted in `start_idx`.
