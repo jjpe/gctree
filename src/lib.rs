@@ -2,14 +2,9 @@
 //! datastructure that can be newtyped for higher-level trees.
 #![forbid(unsafe_code)]
 
+mod node;
 pub mod dag;
 pub mod error;
-pub mod node_count;
-pub mod node_idx;
 pub mod tree;
 
-#[rustfmt::skip]
-pub use crate::{
-    node_count::NodeCount,
-    node_idx::NodeIdx
-};
+pub use crate::node::{Node, NodeCount, NodeIdx};
