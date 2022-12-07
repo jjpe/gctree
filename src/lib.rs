@@ -8,4 +8,7 @@ pub mod dag;
 pub mod error;
 pub mod tree;
 
-pub use crate::node::{Node, NodeCount, NodeIdx};
+pub use crate::{
+    node::{Node, NodeCount, NodeIdx},
+    tree::Tree,
+};
