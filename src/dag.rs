@@ -3,8 +3,7 @@
 
 use crate::{
     error::{Error, Result},
-    node_count::NodeCount,
-    node_idx::NodeIdx,
+    node::{NodeCount, NodeIdx},
 };
 use std::collections::{HashSet, VecDeque};
 
@@ -66,7 +65,7 @@ impl<D> ArenaDag<D> {
     }
 
     /// Remove `root_ids` from `self.roots`.
-    /// Do not remove the actual nodes themselves.
+    /// Does not remove the actual nodes themselves.
     #[inline(always)]
     pub fn remove_roots(&mut self, root_idxs: HashSet<NodeIdx>) {
         self.roots = self.roots.drain(..)
