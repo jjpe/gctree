@@ -1,6 +1,6 @@
 //!
 
-use crate::node_idx::NodeIdx;
+use crate::node::NodeIdx;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -29,8 +29,13 @@ pub enum Error {
     ExpectedLeafNode(NodeIdx),
     /// Expected Node {0} to be a root node
     ExpectedRootNode(NodeIdx),
-    /// Expected `tree[node_idx]` to have a parent node
-    ParentNotFound { node_idx: NodeIdx },
+
+    /// Expected `tree[node_idx]` to have `tree[parent_idx]` as a parent node
+    ParentNotFound { node_idx: NodeIdx, parent_idx: Option<NodeIdx> },
+    /// Expected `tree[node_idx]` to have `tree[child_idx]` as a child node
+    ChildNotFound { node_idx: NodeIdx, child_idx: NodeIdx },
+    /// No node found with NodeIdx `{0}`
+    NodeNotFound(NodeIdx)
 }
 
 impl From<std::io::Error> for Error {

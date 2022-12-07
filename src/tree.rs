@@ -1,110 +1,85 @@
 //!
 
+use crate::arena::Arena;
 pub use crate::{
     error::{Error, Result},
-    node_count::NodeCount,
-    node_idx::NodeIdx,
+    node::{Node, NodeCount, NodeIdx},
 };
-use deltoid::{
-    Apply, Core, Delta, DeltaError, DeltaResult, FromDelta, IntoDelta,
-};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_derive::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::{self, Debug};
 
 #[derive(Clone, Debug, Hash)]
-pub struct ArenaTree<D: Clone + Debug + Default + PartialEq> {
-    nodes: Vec<Node<D>>,
-    garbage: VecDeque<NodeIdx>,
+pub struct Tree<D> {
+    arena: Arena<D>
 }
 
-#[allow(unused)]
-impl<D> ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq,
-{
-    #[inline(always)]
-    pub fn new() -> Self {
+impl<D> Default for Tree<D> {
+    fn default() -> Self {
         Self::with_capacity(64)
     }
+}
 
-    #[inline(always)]
-    pub fn with_capacity(node_count: usize) -> Self {
-        Self {
-            nodes: Vec::with_capacity(node_count),
-            garbage: VecDeque::new(),
-        }
+impl<D> Tree<D> {
+    pub const ROOT_IDX: NodeIdx = NodeIdx(0);
+
+    pub fn with_capacity(cap: usize) -> Self {
+        Self { arena: Arena::with_capacity(cap) }
     }
 
+    #[inline]
     /// Get the logical size, which is defined as `physical size - garbage size`
     /// i.e. the number of allocated, non-garbage nodes in `self`.
-    #[inline]
     pub fn logical_size(&self) -> NodeCount {
-        self.physical_size() - self.garbage_size()
+        self.arena.logical_size()
     }
 
+    #[inline]
     /// Get the physical size, which is defined as the number of nodes
     /// allocated in the tree, whether they are garbage or not.
-    #[inline]
     pub fn physical_size(&self) -> NodeCount {
-        NodeCount::from(self.nodes.len())
+        self.arena.physical_size()
     }
 
     /// Get the garbage size i.e. the number of garbage nodes in `self`.
     #[inline]
     pub fn garbage_size(&self) -> NodeCount {
-        NodeCount::from(self.garbage.len())
+        self.arena.garbage_size()
     }
 
     #[inline(always)]
     pub fn root_ref(&self) -> &Node<D> {
-        &self[NodeIdx::TREE_ROOT]
+        &self[Self::ROOT_IDX]
     }
 
-    #[allow(unused)]
     #[inline(always)]
     pub fn root_mut(&mut self) -> &mut Node<D> {
-        &mut self[NodeIdx::TREE_ROOT]
+        &mut self[Self::ROOT_IDX]
     }
 
-    pub fn new_node(
+    /// If there is a garbage `Node<D>`in `self`, recycle it.
+    /// Otherwise, allocate a new one.
+    pub fn add_node(
         &mut self,
         parent_idx: impl Into<Option<NodeIdx>>,
+        data: D
     ) -> Result<NodeIdx> {
-        if let Some(cidx) = self.garbage.pop_front() {
-            self[cidx].clear();
-            self[cidx].parent = parent_idx.into();
-            if let Some(pidx) = self[cidx].parent {
-                self[pidx].add_child(cidx)
-            }
-            Ok(cidx)
-        } else {
-            let child_idx = NodeIdx(self.nodes.len());
-            self.nodes.push(Node {
-                idx: child_idx,
-                parent: parent_idx.into(),
-                children: vec![],
-                data: D::default(),
-            });
-            if let Some(parent_idx) = self[child_idx].parent {
-                self[parent_idx].add_child(child_idx);
-            }
-            Ok(child_idx)
+        let node_idx = self.arena.add_node(data);
+        if let Some(parent_idx) = parent_idx.into() {
+            self.arena.add_edge(parent_idx, node_idx);
         }
+        Ok(node_idx)
     }
 
-    fn destroy_node(&mut self, node_idx: NodeIdx) -> Result<()> {
-        if let Some(parent_idx) = self[node_idx].parent {
-            // Filter out the NodeIdx from the parent's child indices
-            self[parent_idx].remove_child(node_idx);
-        }
-        self[node_idx].clear();
-        self.garbage.push_back(node_idx);
-        Ok(())
+    #[inline]
+    /// Recycle `self[node_idx]`.  Since a node conceptually owns
+    /// its children, all descendant nodes and all edges between
+    /// them are removed as well.
+    pub fn rm_node(&mut self, node_idx: NodeIdx) -> Result<()> {
+        self.arena.rm_node(node_idx)
     }
 
     /// Copy a `src` tree to `self`, making it a subtree of `self` in
@@ -112,71 +87,57 @@ where
     /// of `self[dst_node_idx]`.
     /// Note that the `NodeIdx`s of the nodes in `src` will *NOT* be
     /// valid in `self`.
-    pub fn add_subtree(
+    pub fn copy_subtree(
         &mut self,
         dst_node_idx: NodeIdx,
         src: &Self,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        D: Clone
+    {
         type SrcTreeIdx = Option<NodeIdx>;
         type DstTreeIdx = NodeIdx;
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
-        let dst = self;
-        for src_node_idx in src.dfs(NodeIdx::TREE_ROOT) {
-            let src_parent_idx = src[src_node_idx].parent;
+        let (src, dst) = (src, self);
+        for src_node_idx in src.dfs(Self::ROOT_IDX) {
+            let src_parent_idx = src.parent_of(src_node_idx);
             let dst_parent_idx = map.get(&src_parent_idx).copied();
-            let dst_node_idx = dst.new_node(dst_parent_idx)?;
-            dst[dst_node_idx].data = src[src_node_idx].data.clone();
+            let data = src[src_node_idx].data.clone();
+            let dst_node_idx = dst.add_node(dst_parent_idx, data)?;
             map.insert(Some(src_node_idx), dst_node_idx);
         }
         Ok(())
     }
 
-    pub fn remove_subtree(&mut self, start_idx: NodeIdx) -> Result<()> {
-        if self.garbage.contains(&start_idx) {
-            // HACK: shouldn't be necessary
-            return Ok(()); // Don't try to remove garbage
-        }
-        for node_idx in self.dfs(start_idx).rev(/*leaves -> ... -> root*/) {
-            debug_assert!(self[node_idx].children.is_empty());
-            self.destroy_node(node_idx)?;
-        }
-        Ok(())
+    #[inline]
+    pub fn rm_subtree(&mut self, root_idx: NodeIdx) -> Result<()> {
+        self.rm_node(root_idx)
     }
 
     /// Remove all descendant nodes of `self[node_idx]`, but
     /// not `self[node_idx]` itself.
-    pub fn remove_descendants_of(&mut self, node_idx: NodeIdx) -> Result<()> {
+    pub fn rm_descendants_of(&mut self, node_idx: NodeIdx) -> Result<()> {
         for child_idx in self[node_idx].children.clone() {
-            self.remove_subtree(child_idx)?;
+            self.rm_subtree(child_idx)?;
         }
         Ok(())
     }
 
     #[rustfmt::skip]
     /// Make `self[subroot_idx]` the last child node of `self[parent_idx]`.
-    /// Returns an error if `self[subroot_idx].parent` equals `None`.
-    ///
-    // /// If `parent_idx` is `None`, ...
     pub fn move_subtree(
         &mut self,
         subroot_idx: NodeIdx,
-        // TODO: Add support for multiple root nodes in ArenaTree
-        //       before allowing `parent_idx` to be `None`:
-        // parent_idx: impl Into<Option<NodeIdx>>,
         parent_idx: NodeIdx,
     ) -> Result<()> {
-        let old_parent_idx = self[subroot_idx].parent
-            .ok_or(Error::ParentNotFound { node_idx: subroot_idx })?;
-        self[old_parent_idx].remove_child(subroot_idx);
-        self[subroot_idx].parent = parent_idx.into();
-        if let Some(parent_idx) = self[subroot_idx].parent {
-            self[parent_idx].add_child(subroot_idx);
-        }
+        if let Some(old_parent_idx) = self.parent_of(subroot_idx) {
+            self.arena.rm_edge(old_parent_idx, subroot_idx)?;
+        };
+        self.arena.add_edge(parent_idx, subroot_idx);
         Ok(())
     }
 
-    #[rustfmt::skip]
     /// Replace the subtree rooted @ `self[target_idx]` with the subtree
     /// rooted @ `self[subroot_idx]`.  This means that `self[target_idx]`
     /// is removed from `self` and `self[subroot_idx]` takes its place.
@@ -185,115 +146,115 @@ where
         target_idx: NodeIdx,
         subroot_idx: NodeIdx,
     ) -> Result<()> {
-        let parent_idx = self[target_idx].parent
-            // TODO: Remove the `.ok_or()` line below, as well as the
-            //       `Error::ParentNotFound` enum variant used
-            //       in it, after adding multiple root support in
-            //       ArenaTree as well as in the self.move_subtree()
-            //       method definition above:
-            .ok_or(Error::ParentNotFound { node_idx: target_idx })?
-            ;
-        self.move_subtree(subroot_idx, parent_idx)?;
-        // Rather than having the ordinal number of `self[target_idx]`,
-        // `self[subroot_idx]` is the last child of `self[parent_idx]`.
-        // Let's rectify that by swapping the 2:
-        let ordinal = self[parent_idx].get_child_ordinal(target_idx)
-            .unwrap(/*should be safe*/);
-        let removed_node_idx = self[parent_idx].children.swap_remove(ordinal);
-        assert_eq!(target_idx, removed_node_idx);
-        self.remove_subtree(target_idx)?; // Clean up
+        if let Some(parent_idx) = self.parent_of(subroot_idx) {
+            self.arena.rm_edge(parent_idx, subroot_idx)?;
+        }
+        if let Some(parent_idx) = self.parent_of(target_idx) {
+            let pos = self[parent_idx].children.iter()
+                .position(|&cidx| cidx == target_idx);
+            self.arena.rm_edge(parent_idx, target_idx)?;
+            self.arena.insert_edge((parent_idx, None), (subroot_idx, pos));
+        }
+        self.rm_subtree(target_idx)?;
         Ok(())
     }
 
-    /// Return an iterator over the ancestors of `self[node_idx]`, starting
-    /// with the parent of `node_idx` and going toward the root of the tree.
+    #[inline(always)]
+    pub fn self_or_ancestors_of(
+        &self,
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+        self.arena.self_or_ancestors_of(node_idx)
+    }
+
     #[inline(always)]
     pub fn ancestors_of(
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        let mut ancestors = vec![];
-        let mut current_idx: NodeIdx = node_idx;
-        while let Some(parent_idx) = self[current_idx].parent {
-            ancestors.push(parent_idx);
-            current_idx = parent_idx;
-        }
-        ancestors.into_iter()
+        self.arena.ancestors_of(node_idx)
     }
 
-    /// Return an iterator over the siblings of `self[node_idx]`.
-    #[rustfmt::skip]
+    #[inline]
+    pub fn parent_of(&self, node_idx: NodeIdx) -> Option<NodeIdx> {
+        self[node_idx].parents.get(0).copied()
+    }
+
+    #[inline(always)]
+    pub fn self_or_siblings_of(
+        &self,
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+        self.arena.self_or_siblings_of(node_idx)
+    }
+
     #[inline(always)]
     pub fn siblings_of(
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        let parents_children: &[NodeIdx] = self[node_idx].parent
-            .map(|parent_idx| &*self[parent_idx].children)
-            .unwrap_or_default();
-        parents_children.iter().copied()
-            .filter(move |&cidx| cidx != node_idx)
+        self.arena.siblings_of(node_idx)
     }
 
-    /// Return an iterator over the children of `self[node_idx]`.
     #[inline(always)]
     pub fn children_of(
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self[node_idx].children()
+        self.arena.children_of(node_idx)
     }
 
-    /// Return an iterator over the descendants of `self[node_idx]` in DFS order.
+    #[inline(always)]
+    pub fn self_or_descendants_of(
+        &self,
+        node_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+        self.arena.self_or_descendants_of(node_idx)
+    }
+
     #[inline(always)]
     pub fn descendants_of(
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.dfs(node_idx).filter(move |&didx| didx != node_idx)
+        self.arena.descendants_of(node_idx)
     }
 
-    /// Return an iterator over the nodes, in DFS order,
-    /// of the subtree rooted in `start_idx`.
+    #[inline(always)]
     pub fn dfs(
         &self,
         start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        let mut output = Vec::with_capacity(self.nodes.len());
-        let mut stack = vec![start_idx];
-        while let Some(node_idx) = stack.pop() {
-            output.push(node_idx);
-            stack.extend(self[node_idx].children().rev());
-        }
-        output.into_iter()
+        self.arena.dfs(start_idx)
     }
 
-    /// Return an iterator, in BFS order, over the `NodeIdx`s
-    /// of the nodes of the the subtree rooted in `start_idx`.
+    #[inline(always)]
     pub fn bfs(
         &self,
         start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        type Layer = Vec<NodeIdx>;
-        let mut layers: Vec<Layer> = vec![Layer::from([start_idx])];
-        let mut current: Layer = vec![];
-        while let Some(previous_layer) = layers.last() {
-            for &idx in previous_layer {
-                current.extend(self[idx].children());
-            }
-            if current.is_empty() {
-                break;
-            }
-            layers.push(current);
-            current = vec![];
-        }
-        layers.into_iter().flat_map(|layer| layer.into_iter())
+        self.arena.bfs(start_idx)
     }
 }
 
-impl<D> PartialEq<Self> for ArenaTree<D>
+impl<D> std::ops::Index<NodeIdx> for Tree<D> {
+    type Output = Node<D>;
+
+    fn index(&self, idx: NodeIdx) -> &Self::Output {
+        &self.arena[idx]
+    }
+}
+
+impl<D> std::ops::IndexMut<NodeIdx> for Tree<D> {
+    fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
+        &mut self.arena[idx]
+    }
+}
+
+
+impl<D> PartialEq<Self> for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq,
+    D: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         // NOTE: The idea is to do a logical comparison where:
@@ -302,16 +263,13 @@ where
         if self.logical_size() != other.logical_size() {
             return false;
         }
-        let snode_iter = self.dfs(NodeIdx::TREE_ROOT);
-        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
         let mut map = HashMap::new();
-        for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
-            map.insert(snode_idx, onode_idx);
-            let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
-            let (sdata, odata) = (&**snode, &**onode);
-            match (snode.parent, onode.parent) {
-                (None, None) => { /*NOP*/ }
-                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {
+        for (sidx, oidx) in self.dfs(Self::ROOT_IDX).zip(other.dfs(Self::ROOT_IDX)) {
+            map.insert(sidx, oidx);
+            let (snode, onode) = (&self[sidx], &other[oidx]);
+            match (&*snode.parents, &*onode.parents) {
+                (&[], &[]) => { /*NOP*/ }
+                (&[spidx], &[opidx]) if map[&spidx] == opidx => {
                     // NOP
                 }
                 _ => return false,
@@ -319,7 +277,7 @@ where
             if snode.count_children() != onode.count_children() {
                 return false;
             }
-            if sdata != odata {
+            if snode.data != onode.data {
                 return false;
             }
         }
@@ -328,15 +286,12 @@ where
 }
 
 #[rustfmt::skip]
-impl<D> Eq for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq,
-{}
+impl<D> Eq for Tree<D> where D: Eq {}
 
 #[rustfmt::skip]
-impl<D> PartialOrd<Self> for ArenaTree<D>
+impl<D> PartialOrd<Self> for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq + PartialOrd,
+    D: PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // NOTE: The idea is to do a logical comparison where:
@@ -346,17 +301,17 @@ where
         if let Some(Ordering::Greater | Ordering::Less) = size_cmp {
             return size_cmp;
         }
-        let snode_iter = self.dfs(NodeIdx::TREE_ROOT);
-        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
+        let snode_iter = self.dfs(Self::ROOT_IDX);
+        let onode_iter = other.dfs(Self::ROOT_IDX);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
             map.insert(snode_idx, onode_idx);
             let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
             let (sdata, odata) = (&**snode, &**onode);
-            match (snode.parent, onode.parent) {
-                (None, None) => { /*NOP*/ }
-                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/}
-                _ => return snode.parent.partial_cmp(&onode.parent),
+            match (&*snode.parents, &*onode.parents) {
+                (&[], &[]) => { /*NOP*/ }
+                (&[spidx], &[opidx]) if map[&spidx] == opidx => {/*NOP*/}
+                _ => return snode.parents.partial_cmp(&onode.parents),
             }
             let child_count_cmp = snode.count_children()
                 .partial_cmp(&onode.count_children());
@@ -373,9 +328,9 @@ where
 }
 
 #[rustfmt::skip]
-impl<D> Ord for ArenaTree<D>
+impl<D> Ord for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq + Ord,
+    D: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         // NOTE: The idea is to do a logical comparison where:
@@ -385,17 +340,17 @@ where
         if let Ordering::Greater | Ordering::Less = size_cmp {
             return size_cmp;
         }
-        let snode_iter =  self.dfs(NodeIdx::TREE_ROOT);
-        let onode_iter = other.dfs(NodeIdx::TREE_ROOT);
+        let snode_iter =  self.dfs(Self::ROOT_IDX);
+        let onode_iter = other.dfs(Self::ROOT_IDX);
         let mut map = HashMap::new();
         for (snode_idx, onode_idx) in snode_iter.zip(onode_iter) {
             map.insert(snode_idx, onode_idx);
             let (snode, onode) = (&self[snode_idx], &other[onode_idx]);
             let (sdata, odata) = (&**snode, &**onode);
-            match (snode.parent, onode.parent) {
-                (None, None) => {/*NOP*/},
-                (Some(spidx), Some(opidx)) if map[&spidx] == opidx => {/*NOP*/},
-                _ => return snode.parent.cmp(&onode.parent),
+            match (&*snode.parents, &*onode.parents) {
+                (&[], &[]) => {/*NOP*/},
+                (&[spidx], &[opidx]) if map[&spidx] == opidx => {/*NOP*/},
+                _ => return snode.parents.cmp(&onode.parents),
             }
             let child_count_cmp = snode.count_children()
                 .cmp(&onode.count_children());
@@ -411,88 +366,68 @@ where
     }
 }
 
-impl<D> std::ops::Index<NodeIdx> for ArenaTree<D>
+impl<D> fmt::Display for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq,
-{
-    type Output = Node<D>;
-
-    fn index(&self, idx: NodeIdx) -> &Self::Output {
-        &self.nodes[idx.0]
-    }
-}
-
-impl<D> std::ops::IndexMut<NodeIdx> for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq,
-{
-    fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
-        &mut self.nodes[idx.0]
-    }
-}
-
-impl<D> fmt::Display for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq,
+    D: std::fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // NOTE: This loop is `O(D * N)`, where:
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
-        for node_idx in self.dfs(NodeIdx::TREE_ROOT) {
+        for node_idx in self.dfs(Self::ROOT_IDX) {
             for _ in self.ancestors_of(node_idx) {
                 write!(f, "| ")?; // no newline
             }
             let Node { idx, data, .. } = &self[node_idx];
-            writeln!(f, "{idx} {data:?}")?;
+            writeln!(f, "{idx} {data}")?;
         }
         Ok(())
     }
 }
 
+// Manual impl to serialize a `Tree<D>` with relaxed requirements on `D`
 #[rustfmt::skip]
-impl<D: Serialize> Serialize for ArenaTree<D>
+impl<D: Serialize> Serialize for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq + Serialize,
+    D: Serialize,
 {
     fn serialize<S: Serializer>(
         &self,
         serializer: S
     ) -> std::result::Result<S::Ok, S::Error> {
-        const NUM_FIELDS: usize = 2;
-        let mut state = serializer.serialize_struct("ArenaTree", NUM_FIELDS)?;
-        state.serialize_field("nodes", &self.nodes)?;
-        state.serialize_field("garbage", &self.garbage)?;
+        const NUM_FIELDS: usize = 1;
+        let mut state = serializer.serialize_struct("Tree", NUM_FIELDS)?;
+        state.serialize_field("arena", &self.arena)?;
         state.end()
     }
 }
 
+// Manual impl to deserialize a `Tree<D>` with relaxed requirements on `D`
 #[rustfmt::skip]
-impl<'de, D> Deserialize<'de> for ArenaTree<D>
+impl<'de, D> Deserialize<'de> for Tree<D>
 where
-    D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+    // D: Deserialize<'de>, // TODO
 {
     fn deserialize<DE: Deserializer<'de>>(
         d: DE
     ) -> std::result::Result<Self, DE::Error> {
-        #[derive(Deserialize)]
+        #[derive(serde_derive::Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
-            Nodes,
-            Garbage,
+            Arena
         }
 
-        #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-        struct ArenaTreeVisitor<D>(std::marker::PhantomData<D>);
+        struct TreeVisitor<D>(std::marker::PhantomData<D>);
 
-        impl<'de, D> Visitor<'de> for ArenaTreeVisitor<D>
+        impl<'de, D> Visitor<'de> for TreeVisitor<D>
         where
             D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
         {
-            type Value = ArenaTree<D>;
+            type Value = Tree<D>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("struct ArenaTree<D>")
+                f.write_str("struct Tree<D>")
             }
 
             fn visit_seq<V>(
@@ -502,13 +437,10 @@ where
             where
                 V: SeqAccess<'de>,
             {
-                let nodes = seq
+                let arena = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let garbage = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                Ok(ArenaTree { nodes, garbage })
+                Ok(Tree { arena })
             }
 
             fn visit_map<A>(
@@ -518,208 +450,26 @@ where
             where
                 A: MapAccess<'de>,
             {
-                let mut nodes = None;
-                let mut garbage = None;
+                let mut arena = None;
                 while let Some(key) = map.next_key()? {
                     match key {
-                        Field::Nodes => {
-                            if nodes.is_some() {
-                                return Err(de::Error::duplicate_field("nodes"));
-                            }
-                            nodes = Some(map.next_value()?);
+                        Field::Arena if arena.is_some() => {
+                            return Err(de::Error::duplicate_field("nodes"));
                         }
-                        Field::Garbage => {
-                            if garbage.is_some() {
-                                return Err(de::Error::duplicate_field("garbage"));
-                            }
-                            garbage = Some(map.next_value()?);
-                        }
+                        Field::Arena => { arena = Some(map.next_value()?); }
+
                     }
                 }
-                Ok(ArenaTree {
-                    nodes: nodes.ok_or_else(|| de::Error::missing_field("nodes"))?,
-                    garbage: garbage.ok_or_else(|| de::Error::missing_field("garbage"))?,
+                Ok(Tree {
+                    arena: arena.ok_or_else(|| de::Error::missing_field("arena"))?,
                 })
             }
         }
 
-        d.deserialize_map(ArenaTreeVisitor(std::marker::PhantomData))
+        d.deserialize_map(TreeVisitor(std::marker::PhantomData))
     }
 }
 
-#[rustfmt::skip]
-impl<D> Core for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq
-        + for<'de> Deserialize<'de> + Serialize
-        + Core,
-{
-    type Delta = ArenaTreeDelta<D>;
-}
-
-#[rustfmt::skip]
-impl<D> Apply for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq
-        + for<'de> Deserialize<'de> + Serialize
-        + Apply,
-{
-    fn apply(&self, delta: Self::Delta) -> DeltaResult<Self> {
-        match delta.0 {
-            Some(d) => Ok(d),
-            None => Err(DeltaError::FailedToApplyDelta {
-                reason: "Expected a `ArenaTreeDelta(Some(_))` value".to_string(),
-            }),
-        }
-    }
-}
-
-#[rustfmt::skip]
-impl<D> Delta for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq
-        + for<'de> Deserialize<'de> + Serialize
-        + Delta,
-{
-    fn delta(&self, rhs: &Self) -> DeltaResult<Self::Delta> {
-        Ok(ArenaTreeDelta(if self == rhs {
-            None
-        } else {
-            Some(rhs.clone()) // TODO: improve efficiency
-        }))
-    }
-}
-
-#[rustfmt::skip]
-impl<D> FromDelta for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq
-        + for<'de> Deserialize<'de> + Serialize
-        + FromDelta,
-{
-    fn from_delta(delta: Self::Delta) -> DeltaResult<Self> {
-        match delta.0 {
-            Some(d) => Ok(d),
-            None => Err(DeltaError::FailedToConvertFromDelta {
-                reason: "Expected a `ArenaTreeDelta(Some(_))` value".to_string(),
-            }),
-        }
-    }
-}
-
-#[rustfmt::skip]
-impl<D> IntoDelta for ArenaTree<D>
-where
-    D: Clone + Debug + Default + PartialEq
-        + for<'de> Deserialize<'de> + Serialize
-        + IntoDelta,
-{
-    fn into_delta(self) -> DeltaResult<Self::Delta> {
-        Ok(ArenaTreeDelta(Some(self)))
-    }
-}
-
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    serde_derive::Serialize,
-    serde_derive::Deserialize
-)]
-pub struct ArenaTreeDelta<D>(Option<ArenaTree<D>>)
-where
-    D: Clone + Debug + Default + PartialEq + Core;
-
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::Deref,
-    derive_more::DerefMut,
-)]
-pub struct Node<D> {
-    pub idx: NodeIdx,
-    pub parent: Option<NodeIdx>,
-    pub children: Vec<NodeIdx>,
-    #[deref]
-    #[deref_mut]
-    pub data: D,
-}
-
-impl<D> Node<D> {
-    #[inline(always)]
-    pub fn children(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.children.iter().copied()
-    }
-
-    pub fn count_children(&self) -> usize {
-        self.children.len()
-    }
-
-    #[inline(always)]
-    pub fn add_child(&mut self, child_idx: NodeIdx) {
-        self.children.push(child_idx);
-    }
-
-    /// Filter out `child_idx` from `self.children`.
-    /// Has no effect if `self.children` does not contain `child_idx`.
-    #[inline]
-    #[rustfmt::skip]
-    pub fn remove_child(&mut self, child_idx: NodeIdx) {
-        if !self.children.contains(&child_idx) {
-            return;
-        }
-        self.children = self.children.drain(..)
-            .filter(|&cidx| cidx != child_idx)
-            .collect();
-    }
-
-    #[inline(always)]
-    pub fn clear(&mut self)
-    where
-        D: Default,
-    {
-        self.parent = None;
-        self.children.clear();
-        self.data = D::default();
-    }
-
-    /// Assuming that `child_idx` is a member of `self.children`, return the
-    /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
-    /// for `child_idx` e.g. the leftmost child is the `zeroth` child of
-    /// `self`.
-    /// Return `None` if `child_idx` is not a member of `self.children`.
-    #[inline]
-    #[rustfmt::skip]
-    pub fn get_child_ordinal(&self, child_idx: NodeIdx) -> Option<usize> {
-        self.children.iter().enumerate()
-            .filter(|(_, &cidx)| cidx == child_idx)
-            .map(|(ordinal_numeral, _)| ordinal_numeral)
-            .next()
-    }
-}
-
-impl<D: std::fmt::Debug> std::fmt::Debug for Node<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("Node");
-        let ds = ds.field("idx", &self.idx);
-        let ds = if let Some(parent) = self.parent {
-            ds.field("parent", &parent)
-        } else {
-            ds.field("parent", &format_args!("None"))
-        };
-        let ds = ds.field("children", &self.children);
-        let ds = ds.field("data", &self.data);
-        ds.finish()
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -727,7 +477,7 @@ mod tests {
 
     #[derive(Debug)]
     struct Data {
-        tree: ArenaTree<()>,
+        tree: Tree<&'static str>,
         root: NodeIdx,
         bfs_order: Vec<NodeIdx>,
         dfs_order: Vec<NodeIdx>,
@@ -737,17 +487,17 @@ mod tests {
 
     #[rustfmt::skip]
     fn make_data() -> Result<Data> {
-        let mut tree: ArenaTree<_> = ArenaTree::new();
-        let root: NodeIdx = tree.new_node(None)?;
-        let node0: NodeIdx = tree.new_node(root)?;
-        let node00: NodeIdx = tree.new_node(node0)?;
-        let node01: NodeIdx = tree.new_node(node0)?;
-        let node1: NodeIdx = tree.new_node(root)?;
-        let node10: NodeIdx = tree.new_node(node1)?;
-        let node2: NodeIdx = tree.new_node(root)?;
-        let node20: NodeIdx = tree.new_node(node2)?;
-        let node200: NodeIdx = tree.new_node(node20)?;
-        let node21: NodeIdx = tree.new_node(node2)?;
+        let mut tree: Tree<&str> = Tree::default();
+        let root: NodeIdx = tree.add_node(None, "")?;
+        let node0: NodeIdx = tree.add_node(root, "")?;
+        let node00: NodeIdx = tree.add_node(node0, "")?;
+        let node01: NodeIdx = tree.add_node(node0, "")?;
+        let node1: NodeIdx = tree.add_node(root, "")?;
+        let node10: NodeIdx = tree.add_node(node1, "")?;
+        let node2: NodeIdx = tree.add_node(root, "")?;
+        let node20: NodeIdx = tree.add_node(node2, "")?;
+        let node200: NodeIdx = tree.add_node(node20, "")?;
+        let node21: NodeIdx = tree.add_node(node2, "")?;
         Ok(Data {
             tree,
             root,
@@ -813,95 +563,54 @@ mod tests {
     }
 
     #[test]
-    fn add_subtree() -> Result<()> {
-        let mut tree: ArenaTree<String> = ArenaTree::new();
-        let root: NodeIdx = tree.new_node(None)?;
-        let node0: NodeIdx = tree.new_node(root)?;
-        let node1: NodeIdx = tree.new_node(root)?;
-        let node10: NodeIdx = tree.new_node(node1)?;
-        let node100: NodeIdx = tree.new_node(node10)?;
-        let node2: NodeIdx = tree.new_node(root)?;
-        let node20: NodeIdx = tree.new_node(node2)?;
-        let tree_pairs = [
-            (root, "root"),
-            (node0, "node0"),
-            (node1, "node1"),
-            (node10, "node10"),
-            (node100, "node100"),
-            (node2, "node2"),
-            (node20, "node20"),
-        ];
-        for &(idx, data) in &tree_pairs {
-            *tree[idx] = data.to_string();
-        }
+    #[allow(unused)]
+    fn copy_subtree() -> Result<()> {
+        let mut tree: Tree<&str> = Tree::default();
+        let root: NodeIdx = tree.add_node(None, "root")?;
+        let node0: NodeIdx = tree.add_node(root, "node0")?;
+        let node1: NodeIdx = tree.add_node(root, "node1")?;
+        let node10: NodeIdx = tree.add_node(node1, "node10")?;
+        let node100: NodeIdx = tree.add_node(node10, "node100")?;
+        let node2: NodeIdx = tree.add_node(root, "node2")?;
+        let node20: NodeIdx = tree.add_node(node2, "node20")?;
 
-        let mut subtree: ArenaTree<String> = ArenaTree::new();
-        let st_root: NodeIdx = subtree.new_node(None)?;
-        let st_node0: NodeIdx = subtree.new_node(st_root)?;
-        let st_node1: NodeIdx = subtree.new_node(st_root)?;
-        let st_node10: NodeIdx = subtree.new_node(st_node1)?;
-        let st_node100: NodeIdx = subtree.new_node(st_node10)?;
-        let st_node2: NodeIdx = subtree.new_node(st_root)?;
-        let st_node20: NodeIdx = subtree.new_node(st_node2)?;
-        let subtree_pairs = [
-            (st_root, "root (subtree)"),
-            (st_node0, "node0 (subtree)"),
-            (st_node1, "node1 (subtree)"),
-            (st_node10, "node10 (subtree)"),
-            (st_node100, "node100 (subtree)"),
-            (st_node2, "node2 (subtree)"),
-            (st_node20, "node20 (subtree)"),
-        ];
-        for &(idx, data) in &subtree_pairs {
-            *subtree[idx] = data.to_string()
-        }
+        let mut subtree: Tree<&str> = Tree::default();
+        let st_root: NodeIdx = subtree.add_node(None, "root (subtree)")?;
+        let st_node0: NodeIdx = subtree.add_node(st_root, "node0 (subtree)")?;
+        let st_node1: NodeIdx = subtree.add_node(st_root, "node1 (subtree)")?;
+        let st_node10: NodeIdx = subtree.add_node(st_node1, "node10 (subtree)")?;
+        let st_node100: NodeIdx = subtree.add_node(st_node10, "node100 (subtree)")?;
+        let st_node2: NodeIdx = subtree.add_node(st_root, "node2 (subtree)")?;
+        let st_node20: NodeIdx = subtree.add_node(st_node2, "node20 (subtree)")?;
 
-        tree.add_subtree(node20, &subtree)?;
+        tree.copy_subtree(node20, &subtree)?;
 
-        let mut expected: ArenaTree<String> = ArenaTree::new();
-        let e_root: NodeIdx = expected.new_node(None)?; //  0
-        let e_node0: NodeIdx = expected.new_node(e_root)?; //  1
-        let e_node1: NodeIdx = expected.new_node(e_root)?; //  2
-        let e_node10: NodeIdx = expected.new_node(e_node1)?; //  3
-        let e_node100: NodeIdx = expected.new_node(e_node10)?; //  4
-        let e_node2: NodeIdx = expected.new_node(e_root)?; //  5
-        let e_node20: NodeIdx = expected.new_node(e_node2)?; //  6
-        let e_st_root: NodeIdx = expected.new_node(e_node20)?; //  7
-        let e_st_node0: NodeIdx = expected.new_node(e_st_root)?; //  8
-        let e_st_node1: NodeIdx = expected.new_node(e_st_root)?; //  9
-        let e_st_node10: NodeIdx = expected.new_node(e_st_node1)?; // 10
-        let e_st_node100: NodeIdx = expected.new_node(e_st_node10)?; // 11
-        let e_st_node2: NodeIdx = expected.new_node(e_st_root)?; // 12
-        let e_st_node20: NodeIdx = expected.new_node(e_st_node2)?; // 13
-        let expected_pairs = [
-            (e_root, "root"),
-            (e_node0, "node0"),
-            (e_node1, "node1"),
-            (e_node10, "node10"),
-            (e_node100, "node100"),
-            (e_node2, "node2"),
-            (e_node20, "node20"),
-            (e_st_root, "root (subtree)"),
-            (e_st_node0, "node0 (subtree)"),
-            (e_st_node1, "node1 (subtree)"),
-            (e_st_node10, "node10 (subtree)"),
-            (e_st_node100, "node100 (subtree)"),
-            (e_st_node2, "node2 (subtree)"),
-            (e_st_node20, "node20 (subtree)"),
-        ];
-        for &(idx, data) in &expected_pairs {
-            *expected[idx] = data.to_string()
-        }
+        let mut expected: Tree<&str> = Tree::default();
+        let e_root = expected.add_node(None, "root")?; //  0
+        let e_node0 = expected.add_node(e_root, "node0")?; //  1
+        let e_node1 = expected.add_node(e_root, "node1")?; //  2
+        let e_node10 = expected.add_node(e_node1, "node10")?; //  3
+        let e_node100 = expected.add_node(e_node10, "node100")?; //  4
+        let e_node2 = expected.add_node(e_root, "node2")?; //  5
+        let e_node20 = expected.add_node(e_node2, "node20")?; //  6
+        let e_st_root = expected.add_node(e_node20, "root (subtree)")?; //  7
+        let e_st_node0 = expected.add_node(e_st_root, "node0 (subtree)")?; //  8
+        let e_st_node1 = expected.add_node(e_st_root, "node1 (subtree)")?; //  9
+        let e_st_node10 = expected.add_node(e_st_node1, "node10 (subtree)")?; // 10
+        let e_st_node100 = expected.add_node(e_st_node10, "node100 (subtree)")?; // 11
+        let e_st_node2 = expected.add_node(e_st_root, "node2 (subtree)")?; // 12
+        let e_st_node20 = expected.add_node(e_st_node2, "node20 (subtree)")?; // 13
 
-        assert_eq!(tree, expected, "{:#?} != {:#?}", tree, expected);
+        assert_eq!(tree, expected, "\n{} !=\n{}", tree, expected);
         Ok(())
     }
 
     #[test]
+    #[allow(unused)]
     fn remove_subtree() -> Result<()> {
         let mut data = make_data()?;
         let node0 = NodeIdx(1);
-        data.tree.remove_subtree(node0)?;
+        data.tree.rm_subtree(node0)?;
         let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
         let subtree_dfs_order: Vec<_> = data.tree.dfs(data.root).collect();
@@ -915,15 +624,15 @@ mod tests {
         let node0 = NodeIdx(1);
 
         println!("initial:\n{}\n{:#?}", data.tree, data.tree);
-        assert!(data.tree.garbage.is_empty());
+        // assert!(data.tree.garbage.is_empty());
 
-        data.tree.remove_subtree(node0)?;
+        data.tree.rm_subtree(node0)?;
         println!("after removal 1:\n{}\n{:#?}", data.tree, data.tree);
-        assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
+        // assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
 
-        data.tree.remove_subtree(node0)?;
+        data.tree.rm_subtree(node0)?;
         println!("after removal 2:\n{}\n{:#?}", data.tree, data.tree);
-        assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
+        // assert_eq!(data.tree.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
 
         let subtree_bfs_order: Vec<_> = data.tree.bfs(data.root).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
@@ -935,10 +644,10 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn remove_descendants_of() -> Result<()> {
+    fn rm_descendants_of() -> Result<()> {
         let mut data = make_data()?;
         println!("tree 0:\n{}", data.tree);
-        data.tree.remove_descendants_of(NodeIdx(6))?;
+        data.tree.rm_descendants_of(NodeIdx(6))?;
         println!("tree 1:\n{}", data.tree);
         assert!(data.tree[NodeIdx(6)].children.is_empty());
         let expected = &[NodeIdx(1), NodeIdx(4), NodeIdx(6)];
@@ -1000,18 +709,18 @@ mod tests {
         // Make `tree[subroot_idx]` a child of `tree[parent_idx]`,
         // i.e. move the subtree rooted in `tree[subroot_idx]`:
         tree.move_subtree(subroot_idx, parent_idx)?;
-        let mut expected = ArenaTree::<()>::new();
+        let mut expected = Tree::<&str>::default();
         // The order in which the nodes are added is significant:
-        let root_idx = expected.new_node(None)?;
-        let _node1_idx = expected.new_node(root_idx)?;
-        let _node2_idx = expected.new_node(_node1_idx)?;
-        let _node3_idx = expected.new_node(_node1_idx)?;
-        let _node4_idx = expected.new_node(root_idx)?;
-        let _node5_idx = expected.new_node(_node4_idx)?;
-        let _node6_idx = expected.new_node(_node1_idx)?;
-        let _node7_idx = expected.new_node(_node6_idx)?;
-        let _node8_idx = expected.new_node(_node7_idx)?;
-        let _node9_idx = expected.new_node(_node6_idx)?;
+        let root_idx = expected.add_node(None, "")?;
+        let _node1_idx = expected.add_node(root_idx, "")?;
+        let _node2_idx = expected.add_node(_node1_idx, "")?;
+        let _node3_idx = expected.add_node(_node1_idx, "")?;
+        let _node4_idx = expected.add_node(root_idx, "")?;
+        let _node5_idx = expected.add_node(_node4_idx, "")?;
+        let _node6_idx = expected.add_node(_node1_idx, "")?;
+        let _node7_idx = expected.add_node(_node6_idx, "")?;
+        let _node8_idx = expected.add_node(_node7_idx, "")?;
+        let _node9_idx = expected.add_node(_node6_idx, "")?;
         assert_eq!(
             tree, expected,
             "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
@@ -1049,15 +758,15 @@ mod tests {
         assert_eq!(tree[NodeIdx(6)].children, [NodeIdx(7), NodeIdx(9)]);
         assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
         assert_eq!(tree[NodeIdx(4)].children, [NodeIdx(5)]);
-        assert_eq!(tree[NodeIdx(0)].parent, None);
-        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(4)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(1)));
-        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
-        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
-        assert_eq!(tree[NodeIdx(5)].parent, Some(NodeIdx(4)));
+        assert_eq!(tree.parent_of(NodeIdx(0)), None);
+        assert_eq!(tree.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(4)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(6)), Some(NodeIdx(1)));
+        assert_eq!(tree.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
+        assert_eq!(tree.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
+        assert_eq!(tree.parent_of(NodeIdx(5)), Some(NodeIdx(4)));
 
         // Replace `self[target_idx]` with `self[subroot_idx]`:
         tree.replace_subtree(
@@ -1070,17 +779,17 @@ mod tests {
         assert_eq!(tree[NodeIdx(1)].children, [NodeIdx(3)]);
         assert_eq!(tree[NodeIdx(6)].children, [NodeIdx(7), NodeIdx(9)]);
         assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
-        assert_eq!(tree[NodeIdx(0)].parent, None);
-        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
-        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
+        assert_eq!(tree.parent_of(NodeIdx(0)), None);
+        assert_eq!(tree.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(6)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
+        assert_eq!(tree.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
 
-        let _node02_idx = tree.new_node(NodeIdx(0))?;
-        let _node020_idx = tree.new_node(_node02_idx)?;
-        let _node0200_idx = tree.new_node(_node020_idx)?;
+        let _node02_idx = tree.add_node(NodeIdx(0), "")?;
+        let _node020_idx = tree.add_node(_node02_idx, "")?;
+        let _node0200_idx = tree.add_node(_node020_idx, "")?;
         println!("3 tree:\n\n{tree}\n{tree:#?}\n");
 
         assert_eq!(
@@ -1092,16 +801,16 @@ mod tests {
         assert_eq!(tree[NodeIdx(7)].children, [NodeIdx(8)]);
         assert_eq!(tree[NodeIdx(2)].children, [NodeIdx(5)]);
         assert_eq!(tree[NodeIdx(5)].children, [NodeIdx(4)]);
-        assert_eq!(tree[NodeIdx(0)].parent, None);
-        assert_eq!(tree[NodeIdx(1)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(6)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(2)].parent, Some(NodeIdx(0)));
-        assert_eq!(tree[NodeIdx(3)].parent, Some(NodeIdx(1)));
-        assert_eq!(tree[NodeIdx(7)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(9)].parent, Some(NodeIdx(6)));
-        assert_eq!(tree[NodeIdx(8)].parent, Some(NodeIdx(7)));
-        assert_eq!(tree[NodeIdx(5)].parent, Some(NodeIdx(2)));
-        assert_eq!(tree[NodeIdx(4)].parent, Some(NodeIdx(5)));
+        assert_eq!(tree.parent_of(NodeIdx(0)), None);
+        assert_eq!(tree.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(6)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(2)), Some(NodeIdx(0)));
+        assert_eq!(tree.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
+        assert_eq!(tree.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
+        assert_eq!(tree.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
+        assert_eq!(tree.parent_of(NodeIdx(5)), Some(NodeIdx(2)));
+        assert_eq!(tree.parent_of(NodeIdx(4)), Some(NodeIdx(5)));
 
         Ok(())
     }
