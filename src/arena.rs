@@ -105,15 +105,15 @@ impl<D> Arena<D> {
     /// at position `c`, or appended if c` is `None`.
     pub fn insert_edge(
         &mut self,
-        (parent_idx, p): (NodeIdx, Option<usize>),
-        (child_idx,  c): (NodeIdx, Option<usize>),
+        (parent_idx, parent_pos): (NodeIdx, Option<usize>),
+        (child_idx,   child_pos): (NodeIdx, Option<usize>),
     ) {
-        if let Some(child_pos) = c {
+        if let Some(child_pos) = child_pos {
             self[parent_idx].insert_child(child_idx, child_pos);
         } else {
             self[parent_idx].add_child(child_idx);
         }
-        if let Some(parent_pos) = p {
+        if let Some(parent_pos) = parent_pos {
             self[child_idx].insert_parent(parent_idx, parent_pos);
         } else {
             self[child_idx].add_parent(parent_idx);
