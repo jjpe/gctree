@@ -12,6 +12,59 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Debug};
 
+
+#[macro_export]
+/// Declaratively construct `Forest<D>` instances,
+/// where the `$data` arguments all have type `D`.
+macro_rules! forest {
+    (
+        $(
+            ($data:expr $(, $($children:tt),+)?)
+        ),*
+        $(,)?
+    ) => {{ #[allow(redundant_semicolons, unused)] {
+        let mut forest = $crate::Forest::default();
+        $(
+            let root_idx = forest.add_root($data);
+            $(
+                $(
+                    _forest! { [in forest] root_idx; $children }
+                )+
+            )? ;
+        )* ;
+        forest
+    }}};
+}
+
+pub use forest;
+
+#[doc(hidden)]
+#[macro_export]
+// A "placement in" variant of the `forest!{}` macro.
+// This internal version accommodates 3 things:
+//   1. No `Forest` instance is created. Instead, one is passed
+//      in as an additional macro argument named `$forest`.
+//   2. No `Forest` instance is returned.
+//   3. A `$parent_idx` is passed as a macro argument.
+macro_rules! _forest {
+    (
+        [in $arena:expr]
+        $parent_idx:expr;
+        ($data:expr $(, $($children:tt),+)?)
+    ) => { #[allow(redundant_semicolons, unused)] {
+        let forest: &mut $crate::Forest<_> = &mut $arena;
+        let node_idx: $crate::NodeIdx = forest.add_node($data);
+        forest.add_edge($parent_idx, node_idx);
+        $(
+            $(
+                _forest! { [in $arena] node_idx; $children }
+            )+
+        )? ;
+    }};
+}
+
+
+
 #[derive(Clone, Debug, Hash)]
 pub struct Forest<D> {
     arena: Arena<D>,
@@ -709,68 +762,48 @@ mod tests {
     #[test]
     #[allow(unused)]
     fn copy_subforest() -> Result<()> {
-        let mut forest: Forest<&str> = Forest::default();
-        let root: NodeIdx = forest.add_root("root"); // <--
-        let node0: NodeIdx = forest.add_node("node0");
-        let node1: NodeIdx = forest.add_node("node1");
-        let node10: NodeIdx = forest.add_node("node10");
-        let node100: NodeIdx = forest.add_node("node100");
-        let node2: NodeIdx = forest.add_node("node2");
-        let node20: NodeIdx = forest.add_node("node20");
-        forest.add_edge(root,   node0);
-        forest.add_edge(root,   node1);
-        forest.add_edge(node1,  node10);
-        forest.add_edge(node10, node100);
-        forest.add_edge(root,   node2);
-        forest.add_edge(node2,  node20);
+        let mut forest = forest! {
+            ("root",
+             ("node0"),
+             ("node1",
+              ("node10",
+               ("node100"))),
+             ("node2",
+              ("node20")))
+        };
+        let node20 = NodeIdx(6);
 
-        let mut subtree: Forest<&str> = Forest::default();
-        let st_root: NodeIdx = subtree.add_root("root (subtree)"); // <--
-        let st_node0: NodeIdx = subtree.add_node("node0 (subtree)");
-        let st_node1: NodeIdx = subtree.add_node("node1 (subtree)");
-        let st_node10: NodeIdx = subtree.add_node("node10 (subtree)");
-        let st_node100: NodeIdx = subtree.add_node("node100 (subtree)");
-        let st_node2: NodeIdx = subtree.add_node("node2 (subtree)");
-        let st_node20: NodeIdx = subtree.add_node("node20 (subtree)");
-        subtree.add_edge(st_root,   st_node0);
-        subtree.add_edge(st_root,   st_node1);
-        subtree.add_edge(st_node1,  st_node10);
-        subtree.add_edge(st_node10, st_node100);
-        subtree.add_edge(st_root,   st_node2);
-        subtree.add_edge(st_node2,  st_node20);
+        let mut subtree = forest! {
+            ("root (subtree)",
+             ("node0 (subtree)"),
+             ("node1 (subtree)",
+              ("node10 (subtree)",
+               ("node100 (subtree)"))),
+             ("node2 (subtree)",
+              ("node20 (subtree)")))
+        };
+        let subtree_root = NodeIdx(0);
 
-        forest.copy_subtree(st_node20, (&subtree, st_root))?;
+        forest.copy_subtree(node20, (&subtree, subtree_root))?;
 
-        let mut expected: Forest<&str> = Forest::default();
-        let e_root   = expected.add_root("root");     //  0
-        let e_node0   = expected.add_node("node0");   //  1
-        let e_node1   = expected.add_node("node1");   //  2
-        let e_node10  = expected.add_node("node10");  //  3
-        let e_node100 = expected.add_node("node100"); //  4
-        let e_node2   = expected.add_node("node2");   //  5
-        let e_node20  = expected.add_node("node20");  //  6
-        expected.add_edge(e_root,   e_node0);
-        expected.add_edge(e_root,   e_node1);
-        expected.add_edge(e_node1,  e_node10);
-        expected.add_edge(e_node10, e_node100);
-        expected.add_edge(e_root,   e_node2);
-        expected.add_edge(e_node2,  e_node20);
-        let e_st_root    = expected.add_node("root (subtree)");    //  7
-        let e_st_node0   = expected.add_node("node0 (subtree)");   //  8
-        let e_st_node1   = expected.add_node("node1 (subtree)");   //  9
-        let e_st_node10  = expected.add_node("node10 (subtree)");  // 10
-        let e_st_node100 = expected.add_node("node100 (subtree)"); // 11
-        let e_st_node2   = expected.add_node("node2 (subtree)");   // 12
-        let e_st_node20  = expected.add_node("node20 (subtree)");  // 13
-        expected.add_edge(e_node20,    e_st_root);
-        expected.add_edge(e_st_root,   e_st_node0);
-        expected.add_edge(e_st_root,   e_st_node1);
-        expected.add_edge(e_st_node1,  e_st_node10);
-        expected.add_edge(e_st_node10, e_st_node100);
-        expected.add_edge(e_st_root,   e_st_node2);
-        expected.add_edge(e_st_node2,  e_st_node20);
-
+        let expected = forest! {
+            ("root",
+             ("node0"),
+             ("node1",
+              ("node10",
+               ("node100"))),
+             ("node2",
+              ("node20",
+               ("root (subtree)",
+                ("node0 (subtree)"),
+                ("node1 (subtree)",
+                 ("node10 (subtree)",
+                  ("node100 (subtree)"))),
+                ("node2 (subtree)",
+                 ("node20 (subtree)"))))))
+        };
         assert_eq!(forest, expected, "\n{} !=\n{}", forest, expected);
+
         Ok(())
     }
 
@@ -824,45 +857,28 @@ mod tests {
         tree.move_subtree(parent_idx, subroot_idx)?;
         println!("1 tree:\n{tree}");
 
-        let mut expected = Forest::<&str>::default();
-        let root0_idx = expected.add_root(""); //  0
-        let node1_idx = expected.add_node("");
-        let node2_idx = expected.add_node("");
-        let node3_idx = expected.add_node("");
-        let node4_idx = expected.add_node("");
-        let node5_idx = expected.add_node("");
-        let node6_idx = expected.add_node("");
-        let node7_idx = expected.add_node("");
-        let node8_idx = expected.add_node("");
-        let node9_idx = expected.add_node("");
-        expected.add_edge(root0_idx, node1_idx);
-        expected.add_edge(node1_idx, node2_idx);
-        expected.add_edge(node1_idx, node3_idx);
-        expected.add_edge(root0_idx, node4_idx);
-        expected.add_edge(node4_idx, node5_idx);
-        expected.add_edge(node1_idx, node6_idx);
-        expected.add_edge(node6_idx, node7_idx);
-        expected.add_edge(node7_idx, node8_idx);
-        expected.add_edge(node6_idx, node9_idx);
-        let root1_idx = expected.add_root(""); // 10
-        let node11_idx = expected.add_node("");
-        let node12_idx = expected.add_node("");
-        let node13_idx = expected.add_node("");
-        let node14_idx = expected.add_node("");
-        let node15_idx = expected.add_node("");
-        let node16_idx = expected.add_node("");
-        let node17_idx = expected.add_node("");
-        let node18_idx = expected.add_node("");
-        let node19_idx = expected.add_node("");
-        expected.add_edge(root1_idx,  node11_idx);
-        expected.add_edge(node11_idx, node12_idx);
-        expected.add_edge(node11_idx, node13_idx);
-        expected.add_edge(root1_idx,  node14_idx);
-        expected.add_edge(node14_idx, node15_idx);
-        expected.add_edge(root1_idx,  node16_idx);
-        expected.add_edge(node16_idx, node17_idx);
-        expected.add_edge(node17_idx, node18_idx);
-        expected.add_edge(node16_idx, node19_idx);
+        let expected = forest! {
+            ("", // root 0
+             ("",
+              (""),
+              (""),
+              ("",
+               ("",
+                ("")),
+               (""))),
+             ("",
+              (""))),
+            ("", // root 1
+             ("",
+              (""),
+              ("")),
+             ("",
+              ("")),
+             ("",
+              ("",
+               ("")),
+              ("")))
+        };
         assert_eq!(
             tree, expected,
             "\ntree:\n{tree}\n    !=\nexpected:\n{expected}"
