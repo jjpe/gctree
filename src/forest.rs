@@ -28,7 +28,7 @@ macro_rules! forest {
             let root_idx = forest.add_root($data);
             $(
                 $(
-                    _forest! { [in forest] root_idx; $children }
+                    place_forest! { [in forest] root_idx; $children }
                 )+
             )? ;
         )* ;
@@ -46,21 +46,21 @@ pub use forest;
 //      in as an additional macro argument named `$forest`.
 //   2. No `Forest` instance is returned.
 //   3. A `$parent_idx` is passed as a macro argument.
-macro_rules! _forest {
+macro_rules! place_forest {
     (
         [in $arena:expr]
         $parent_idx:expr;
         ($data:expr $(, $($children:tt),+)?)
-    ) => { #[allow(redundant_semicolons, unused)] {
+    ) => {{ #[allow(redundant_semicolons, unused)] {
         let forest: &mut $crate::Forest<_> = &mut $arena;
         let node_idx: $crate::NodeIdx = forest.add_node($data);
         forest.add_edge($parent_idx, node_idx);
         $(
             $(
-                _forest! { [in $arena] node_idx; $children }
+                place_forest! { [in $arena] node_idx; $children }
             )+
         )? ;
-    }};
+    }}};
 }
 
 
@@ -848,14 +848,14 @@ mod tests {
     #[rustfmt::skip]
     fn move_subtree() -> Result<()> {
         let data = make_data()?;
-        let mut tree = data.forest.clone();
+        let mut forest = data.forest.clone();
 
         let (parent_idx, subroot_idx) = (NodeIdx(1), NodeIdx(6));
         // Make `tree[subroot_idx]` a child of `tree[parent_idx]`,
         // i.e. move the subtree rooted in `tree[subroot_idx]`:
-        println!("0 tree:\n{tree}");
-        tree.move_subtree(parent_idx, subroot_idx)?;
-        println!("1 tree:\n{tree}");
+        println!("0 forest:\n{forest}");
+        forest.move_subtree(parent_idx, subroot_idx)?;
+        println!("1 forest:\n{forest}");
 
         let expected = forest! {
             ("", // root 0
@@ -880,18 +880,18 @@ mod tests {
               ("")))
         };
         assert_eq!(
-            tree, expected,
-            "\ntree:\n{tree}\n    !=\nexpected:\n{expected}"
+            forest, expected,
+            "\nforest:\n{forest}\n    !=\nexpected:\n{expected}"
         );
 
         let (parent_idx, subroot_idx) = (NodeIdx(0), NodeIdx(6));
         // Make `tree[subroot_idx]` a child of its grandparent,
         // i.e. move the subtree back:
-        tree.move_subtree(parent_idx, subroot_idx)?;
+        forest.move_subtree(parent_idx, subroot_idx)?;
         let expected = data.forest;
         assert_eq!(
-            tree, expected,
-            "\ntree:\n{tree}\n    !=\n    expected:\n{expected}"
+            forest, expected,
+            "\nforest:\n{forest}\n    !=\n    expected:\n{expected}"
         );
 
         Ok(())
