@@ -1,11 +1,11 @@
 //!
 
 use crate::error::{Error, Result};
-use itertools::Itertools;
 
 #[rustfmt::skip]
 #[derive(
     Clone,
+    Debug,
     PartialEq,
     Eq,
     PartialOrd,
@@ -16,16 +16,16 @@ use itertools::Itertools;
     derive_more::Deref,
     derive_more::DerefMut,
 )]
-pub struct Node<D> {
+pub struct Node<D, P, C> {
     pub idx: NodeIdx,
-    pub parents: Vec<NodeIdx>,
-    pub children: Vec<NodeIdx>,
+    pub parents: Vec<(NodeIdx, P)>,
+    pub children: Vec<(NodeIdx, C)>,
     #[deref]
     #[deref_mut]
     pub data: D,
 }
 
-impl<D> Node<D> {
+impl<D, P, C> Node<D, P, C> {
     pub fn new(idx: NodeIdx, data: D) -> Self {
         Node {
             idx,
@@ -36,8 +36,22 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    pub fn parents(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.parents.iter().copied()
+    pub fn parents(&self) -> impl DoubleEndedIterator<Item = (NodeIdx, &P)> + '_ {
+        self.parents.iter().map(|(idx, data)| (*idx, data))
+    }
+
+    #[inline(always)]
+    pub fn parent_idxs(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+        self.parents.iter().map(|(idx, _)| *idx)
+    }
+
+    #[inline(always)]
+    pub fn parent_edges(&self) -> impl DoubleEndedIterator<Item = Edge<&P>> + '_ {
+        self.parents.iter().map(|(pidx, pdata)| Edge {
+            src: self.idx,
+            dst: *pidx,
+            data: pdata
+        })
     }
 
     #[inline(always)]
@@ -46,43 +60,48 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    pub fn add_parent(&mut self, parent_idx: NodeIdx) {
-        self.parents.push(parent_idx);
+    pub fn add_parent(&mut self, pidx: NodeIdx, pdata: P) {
+        self.parents.push((pidx, pdata));
     }
 
     #[inline]
-    /// Insert `parent_idx` as the `pos`-th parent of `self`.
-    pub fn insert_parent(&mut self, parent_idx: NodeIdx, pos: usize) {
-        // pre: [0, pos)        post: [pos, len)
-        let (pre, post) = self.parents.split_at(pos);
-        self.children = std::iter::empty()
-            .chain(pre.iter().copied())
-            .chain([parent_idx])
-            .chain(post.iter().copied())
-            .unique()
-            .collect();
+    /// Insert `(pidx, pdata)` as the `pos`-th parent of `self`.
+    pub fn insert_parent(&mut self, pidx: NodeIdx, pdata: P, pos: usize) {
+        self.parents.insert(pos, (pidx, pdata));
     }
 
+    #[inline]
+    #[must_use]
+    #[rustfmt::skip]
     /// Filter out `parent_idx` from `self.parents`.
     /// Return an error if `self.parents` does not contain `parent_idx`.
-    #[inline]
-    #[rustfmt::skip]
-    pub fn remove_parent(&mut self, parent_idx: NodeIdx) -> Result<()> {
-        if !self.parents.contains(&parent_idx) {
-            return Err(Error::ParentNotFound {
+    pub fn remove_parent(&mut self, parent_idx: NodeIdx) -> Result<P> {
+        let ordinal = self.get_parent_ordinal(parent_idx)
+            .ok_or_else(|| Error::ParentNotFound {
                 node_idx: self.idx,
                 parent_idx: Some(parent_idx),
-            });
-        }
-        self.parents = self.parents.drain(..)
-            .filter(|&pidx| pidx != parent_idx)
-            .collect();
-        Ok(())
+            })?;
+        let (_, pdata) = self.parents.remove(ordinal);
+        Ok(pdata)
     }
 
     #[inline(always)]
-    pub fn children(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.children.iter().copied()
+    pub fn children(&self) -> impl DoubleEndedIterator<Item = (NodeIdx, &C)> + '_ {
+        self.children.iter().map(|(idx, data)| (*idx, data))
+    }
+
+    #[inline(always)]
+    pub fn child_idxs(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+        self.children.iter().map(|(idx, _)| *idx)
+    }
+
+    #[inline(always)]
+    pub fn child_edges(&self) -> impl DoubleEndedIterator<Item = Edge<&C>> + '_ {
+        self.children.iter().map(|(cidx, cdata)| Edge {
+            src: self.idx,
+            dst: *cidx,
+            data: cdata
+        })
     }
 
     #[inline(always)]
@@ -91,74 +110,62 @@ impl<D> Node<D> {
     }
 
     #[inline(always)]
-    pub fn add_child(&mut self, child_idx: NodeIdx) {
-        self.children.push(child_idx);
-        self.children = self.children.drain(..).unique().collect();
+    pub fn add_child(&mut self, cidx: NodeIdx, cdata: C) {
+        self.children.push((cidx, cdata));
     }
 
     #[inline]
     /// Insert `child_idx` as the `pos`-th child of `self`.
-    pub fn insert_child(&mut self, child_idx: NodeIdx, pos: usize) {
-        let (pre, post) = self.children.split_at(pos);
-        self.children = std::iter::empty()
-            .chain(pre.iter().copied())
-            .chain([child_idx])
-            .chain(post.iter().copied())
-            .unique()
-            .collect();
+    pub fn insert_child(&mut self, cidx: NodeIdx, cdata: C, pos: usize) {
+        self.children.insert(pos, (cidx, cdata));
+    }
+
+    #[inline]
+    #[must_use]
+    #[rustfmt::skip]
+    /// Filter out `child_idx` from `self.children`.
+    /// Return an error if `self.children` does not contain `child_idx`.
+    pub fn remove_child(&mut self, child_idx: NodeIdx) -> Result<C> {
+        let ordinal = self.get_child_ordinal(child_idx)
+            .ok_or_else(|| Error::ChildNotFound {
+                node_idx: self.idx,
+                child_idx
+            })?;
+        let (_, cdata) = self.children.remove(ordinal);
+        Ok(cdata)
+    }
+
+    // #[inline(always)]
+    // pub fn clear(&mut self)
+    // where
+    //     D: Default,
+    // {
+    //     self.parents.clear();
+    //     self.children.clear();
+    //     self.data = D::default();
+    // }
+
+    #[inline]
+    #[rustfmt::skip]
+    /// Assuming that `parent_idx` is a member of `self.parents`, return the
+    /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
+    /// for `parent_idx` e.g. the leftmost parent is the `zeroth` parent of
+    /// `self`.
+    /// Return `None` if `parent_idx` is not a member of `self.parents`.
+    pub fn get_parent_ordinal(&self, parent_idx: NodeIdx) -> Option<usize> {
+        self.parent_idxs().position(|pidx| pidx == parent_idx)
     }
 
     #[inline]
     #[rustfmt::skip]
-    /// Filter out `child_idx` from `self.children`.
-    /// Return an error if `self.children` does not contain `child_idx`.
-    pub fn remove_child(&mut self, child_idx: NodeIdx) -> Result<()> {
-        if !self.children.contains(&child_idx) {
-            return Err(Error::ChildNotFound { node_idx: self.idx, child_idx });
-        }
-        self.children = self.children.drain(..)
-            .filter(|&cidx| cidx != child_idx)
-            .collect();
-        Ok(())
+    /// Assuming that `child_idx` is a member of `self.children`, return the
+    /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
+    /// for `child_idx` e.g. the leftmost child is the `zeroth` child of
+    /// `self`.
+    /// Return `None` if `child_idx` is not a member of `self.children`.
+    pub fn get_child_ordinal(&self, child_idx: NodeIdx) -> Option<usize> {
+        self.child_idxs().position(|cidx| cidx == child_idx)
     }
-
-    #[inline(always)]
-    pub fn clear(&mut self)
-    where
-        D: Default,
-    {
-        self.parents.clear();
-        self.children.clear();
-        self.data = D::default();
-    }
-
-    // /// Assuming that `parent_idx` is a member of `self.parents`, return the
-    // /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
-    // /// for `parent_idx` e.g. the leftmost parent is the `zeroth` parent of
-    // /// `self`.
-    // /// Return `None` if `parent_idx` is not a member of `self.parents`.
-    // #[inline]
-    // #[rustfmt::skip]
-    // pub fn get_parent_ordinal(&self, parent_idx: NodeIdx) -> Option<usize> {
-    //     self.parents.iter().enumerate()
-    //         .filter(|(_, &pidx)| pidx == parent_idx)
-    //         .map(|(ordinal_numeral, _)| ordinal_numeral)
-    //         .next()
-    // }
-
-    // /// Assuming that `child_idx` is a member of `self.children`, return the
-    // /// [ordinal numeral](https://en.wikipedia.org/wiki/Ordinal_numeral)
-    // /// for `child_idx` e.g. the leftmost child is the `zeroth` child of
-    // /// `self`.
-    // /// Return `None` if `child_idx` is not a member of `self.children`.
-    // #[inline]
-    // #[rustfmt::skip]
-    // pub fn get_child_ordinal(&self, child_idx: NodeIdx) -> Option<usize> {
-    //     self.children.iter().enumerate()
-    //         .filter(|(_, &cidx)| cidx == child_idx)
-    //         .map(|(ordinal_numeral, _)| ordinal_numeral)
-    //         .next()
-    // }
 
     #[inline]
     pub fn is_root_node(&self) -> bool {
@@ -173,17 +180,6 @@ impl<D> Node<D> {
     #[inline]
     pub fn is_leaf_node(&self) -> bool {
         self.children.is_empty()
-    }
-}
-
-impl<D: std::fmt::Debug> std::fmt::Debug for Node<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("Node");
-        let ds = ds.field("idx", &self.idx);
-        let ds = ds.field("parents", &self.parents);
-        let ds = ds.field("children", &self.children);
-        let ds = ds.field("data", &self.data);
-        ds.finish()
     }
 }
 
@@ -204,10 +200,6 @@ impl<D: std::fmt::Debug> std::fmt::Debug for Node<D> {
 )]
 pub struct NodeIdx(pub(crate) usize);
 
-// impl NodeIdx {
-//     pub const TREE_ROOT: Self = Self(0);
-// }
-
 impl std::fmt::Debug for NodeIdx {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "NodeIdx({})", self.0)
@@ -217,24 +209,6 @@ impl std::fmt::Debug for NodeIdx {
 impl std::fmt::Display for NodeIdx {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl std::ops::Add<usize> for NodeIdx {
-    type Output = Self;
-
-    #[inline(always)]
-    fn add(self, rhs: usize) -> Self {
-        Self(self.0 + rhs)
-    }
-}
-
-impl std::ops::Sub<usize> for NodeIdx {
-    type Output = Self;
-
-    #[inline(always)]
-    fn sub(self, rhs: usize) -> Self {
-        Self(self.0 - rhs)
     }
 }
 
@@ -270,4 +244,11 @@ impl std::ops::Sub<Self> for NodeCount {
     fn sub(self, rhs: Self) -> Self::Output {
         Self(self.0 - rhs.0)
     }
+}
+
+
+pub struct Edge<R> {
+    pub src: NodeIdx,
+    pub dst: NodeIdx,
+    pub data: R,
 }

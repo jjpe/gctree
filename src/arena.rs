@@ -2,7 +2,7 @@
 
 use crate::{
     error::{Error, Result},
-    node::{Node, NodeCount, NodeIdx}
+    node::{Edge, Node, NodeCount, NodeIdx}
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
@@ -12,18 +12,18 @@ use std::collections::VecDeque;
 use std::fmt::{self, Debug};
 
 #[derive(Clone, Debug, Hash)]
-pub(crate) struct Arena<D> {
-    nodes: Vec<Node<D>>,
+pub(crate) struct Arena<D, P, C> {
+    nodes: Vec<Node<D, P, C>>,
     garbage: VecDeque<NodeIdx>,
 }
 
-impl<D> Default for Arena<D> {
+impl<D, P, C> Default for Arena<D, P, C> {
     fn default() -> Self {
         Self::with_capacity(64)
     }
 }
 
-impl<D> Arena<D> {
+impl<D, P, C> Arena<D, P, C> {
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(cap),
@@ -65,6 +65,7 @@ impl<D> Arena<D> {
         }
     }
 
+    #[must_use]
     /// Recycle `self[node_idx]`.  Since a node conceptually owns
     /// its children, all descendant nodes and all edges between
     /// them are removed as well.
@@ -76,7 +77,7 @@ impl<D> Arena<D> {
             // NOTE: Don't reset the `idx` field of `self[node_idx]`, since
             //       `Node<_>` identity persists between allocations.
             debug_assert!(self[idx].is_leaf_node());
-            self.rm_edges(self[idx].parents.clone(), [idx])?;
+            self.rm_edges(self[idx].parent_idxs().collect::<Vec<_>>(), [idx])?;
             debug_assert!(self[idx].is_root_node());
             // NOTE: Don't clear the  data field of `self[node_idx]`, for perf
             //       reasons.  We can get away with this because of the of the
@@ -88,55 +89,72 @@ impl<D> Arena<D> {
         Ok(())
     }
 
-    /// Add an edge between `self[parent_idx]` and `self[child_idx]`.
-    /// The former registers the latter as a child, while the latter
-    /// registers the former as a parent.
-    pub fn add_edge(&mut self, parent_idx: NodeIdx, child_idx: NodeIdx) {
-        self[parent_idx].add_child(child_idx);
-        self[child_idx].add_parent(parent_idx);
+    pub fn parent_edge(&self, src: NodeIdx, dst: NodeIdx) -> Option<Edge<&P>> {
+        self[src].parent_edges().find(|e| e.src == src && e.dst == dst)
     }
 
-    /// Insert an edge between `self[parent_idx]` and `self[child_idx]`.
+    pub fn child_edge(&self, src: NodeIdx, dst: NodeIdx) -> Option<Edge<&C>> {
+        self[src].child_edges().find(|e| e.src == src && e.dst == dst)
+    }
+
+    /// Add an edge between `self[pidx]` and `self[cidx]`.
     /// The former registers the latter as a child, while the latter
     /// registers the former as a parent.
-    /// The `parent_idx` is inserted in `self[child_idx]` at position
-    /// `p`, or appended if `p` is `None`.
-    /// Similarly, the `child_idx` is inserted in `self[parent_idx]`
-    /// at position `c`, or appended if c` is `None`.
+    /// In addition, `pdata` is assigned to the parent edge i.e. `cidx -> pidx`
+    /// while `cdata` is assigned to the child edge i.e. `pidx -> cidx`.
+    pub fn add_edge(
+        &mut self,
+        (pidx, pdata): (NodeIdx, P),
+        (cidx, cdata): (NodeIdx, C),
+    ) {
+        self[pidx].add_child(cidx, cdata);
+        self[cidx].add_parent(pidx, pdata);
+    }
+
+    /// Insert a bidirectional edge between `self[pidx]` and `self[cidx]`.
+    /// The former registers the latter as a child, while the latter
+    /// registers the former as a parent.
+    /// Parent `(pidx, pdata)` is inserted in `self[cidx].parents` at position
+    /// `ppos`, or appended if `ppos` is `None`.
+    /// Similarly, child `(cidx, cdata)` is inserted in `self[pidx].children`
+    /// at position `cpos`, or appended if cpos` is `None`.
     pub fn insert_edge(
         &mut self,
-        (parent_idx, parent_pos): (NodeIdx, Option<usize>),
-        (child_idx,   child_pos): (NodeIdx, Option<usize>),
+        (pidx, pdata, ppos): (NodeIdx, P, Option<usize>),
+        (cidx, cdata, cpos): (NodeIdx, C, Option<usize>),
     ) {
-        if let Some(child_pos) = child_pos {
-            self[parent_idx].insert_child(child_idx, child_pos);
+        if let Some(child_pos) = cpos {
+            self[pidx].insert_child(cidx, cdata, child_pos);
         } else {
-            self[parent_idx].add_child(child_idx);
+            self[pidx].add_child(cidx, cdata);
         }
-        if let Some(parent_pos) = parent_pos {
-            self[child_idx].insert_parent(parent_idx, parent_pos);
+        if let Some(parent_pos) = ppos {
+            self[cidx].insert_parent(pidx, pdata, parent_pos);
         } else {
-            self[child_idx].add_parent(parent_idx);
+            self[cidx].add_parent(pidx, pdata);
         }
     }
 
+    #[must_use]
     /// Remove all edges between each `self[parent_idx]` on the one
     /// hand, and each `self[child_idx]` on the other.
     /// Return an error if any of the `|parent_idxs| * |child_idxs|`
     /// edges do not exist.
     pub fn rm_edges(
         &mut self,
-        parent_idxs: impl AsRef<[NodeIdx]>,
-        child_idxs: impl AsRef<[NodeIdx]>
+        parent_idxs: impl IntoIterator<Item = NodeIdx>,
+        child_idxs: impl Clone + IntoIterator<Item = NodeIdx>,
     ) -> Result<()> {
-        for &parent_idx in parent_idxs.as_ref() {
-            for &child_idx in child_idxs.as_ref() {
+        let child_idxs: Vec<NodeIdx> = child_idxs.into_iter().collect();
+        for parent_idx in parent_idxs {
+            for &child_idx in &child_idxs {
                 self.rm_edge(parent_idx, child_idx)?;
             }
         }
         Ok(())
     }
 
+    #[must_use]
     /// Remove the edge between `self[parent_idx]` and `self[child_idx]`.
     /// Return an error if no such edge exists.
     pub fn rm_edge(
@@ -157,7 +175,7 @@ impl<D> Arena<D> {
         let mut layers: Vec<Layer> = vec![Layer::from([node_idx])];
         while let Some(previous) = layers.last() {
             let current: Layer = previous.iter()
-                .flat_map(|&idx| self[idx].parents())
+                .flat_map(|&idx| self[idx].parent_idxs())
                 .collect();
             if current.is_empty() {
                 break;
@@ -179,8 +197,7 @@ impl<D> Arena<D> {
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self[node_idx].parents()
-            .flat_map(|pidx| self[pidx].children())
+        self[node_idx].parent_idxs().flat_map(|pidx| self[pidx].child_idxs())
     }
 
     #[inline(always)]
@@ -188,8 +205,8 @@ impl<D> Arena<D> {
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self[node_idx].parents()
-            .flat_map(|pidx| self[pidx].children())
+        self[node_idx].parent_idxs()
+            .flat_map(|pidx| self[pidx].child_idxs())
             .filter(move |&cidx| cidx != node_idx)
     }
 
@@ -198,7 +215,7 @@ impl<D> Arena<D> {
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self[node_idx].children()
+        self[node_idx].child_idxs()
     }
 
     #[inline(always)]
@@ -226,7 +243,7 @@ impl<D> Arena<D> {
         let mut stack = vec![start_idx];
         while let Some(node_idx) = stack.pop() {
             output.push(node_idx);
-            stack.extend(self[node_idx].children().rev());
+            stack.extend(self[node_idx].child_idxs().rev());
         }
         output.into_iter()
     }
@@ -239,7 +256,7 @@ impl<D> Arena<D> {
         let mut layers: Vec<Layer> = vec![Layer::from([start_idx])];
         while let Some(previous) = layers.last() {
             let current: Layer = previous.iter()
-                .flat_map(|&idx| self[idx].children())
+                .flat_map(|&idx| self[idx].child_idxs())
                 .collect();
             if current.is_empty() {
                 break;
@@ -251,21 +268,26 @@ impl<D> Arena<D> {
 
 }
 
-impl<D> std::ops::Index<NodeIdx> for Arena<D> {
-    type Output = Node<D>;
+impl<D, P, C> std::ops::Index<NodeIdx> for Arena<D, P, C> {
+    type Output = Node<D, P, C>;
 
     fn index(&self, idx: NodeIdx) -> &Self::Output {
         &self.nodes[idx.0]
     }
 }
 
-impl<D> std::ops::IndexMut<NodeIdx> for Arena<D> {
+impl<D, P, C> std::ops::IndexMut<NodeIdx> for Arena<D, P, C> {
     fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
         &mut self.nodes[idx.0]
     }
 }
 
-impl<D: Serialize> Serialize for Arena<D> {
+impl<D, P, C> Serialize for Arena<D, P, C>
+where
+    D: Serialize,
+    P: Serialize,
+    C: Serialize,
+{
     fn serialize<S: Serializer>(
         &self,
         serializer: S
@@ -279,9 +301,11 @@ impl<D: Serialize> Serialize for Arena<D> {
 }
 
 #[rustfmt::skip]
-impl<'de, D> Deserialize<'de> for Arena<D>
+impl<'de, D, P, C> Deserialize<'de> for Arena<D, P, C>
 where
     D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+    P: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+    C: Clone + Debug + Default + PartialEq + Deserialize<'de>,
 {
     fn deserialize<DE: Deserializer<'de>>(
         d: DE
@@ -294,13 +318,19 @@ where
         }
 
         #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-        struct ArenaVisitor<D>(std::marker::PhantomData<D>);
+        struct ArenaVisitor<D, P, C>(
+            std::marker::PhantomData<D>,
+            std::marker::PhantomData<P>,
+            std::marker::PhantomData<C>,
+        );
 
-        impl<'de, D> Visitor<'de> for ArenaVisitor<D>
+        impl<'de, D, P, C> Visitor<'de> for ArenaVisitor<D, P, C>
         where
             D: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+            P: Clone + Debug + Default + PartialEq + Deserialize<'de>,
+            C: Clone + Debug + Default + PartialEq + Deserialize<'de>,
         {
-            type Value = Arena<D>;
+            type Value = Arena<D, P, C>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("struct Arena<D>")
@@ -350,9 +380,15 @@ where
             }
         }
 
-        d.deserialize_map(ArenaVisitor(std::marker::PhantomData))
+        d.deserialize_map(ArenaVisitor(
+            std::marker::PhantomData,
+            std::marker::PhantomData,
+            std::marker::PhantomData,
+        ))
     }
 }
+
+
 
 
 
