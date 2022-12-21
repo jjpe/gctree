@@ -104,8 +104,9 @@ impl<D, P, C> Arena<D, P, C> {
     /// while `cdata` is assigned to the child edge i.e. `pidx -> cidx`.
     pub fn add_edge(
         &mut self,
-        (pidx, pdata): (NodeIdx, P),
-        (cidx, cdata): (NodeIdx, C),
+        (pidx, cidx): (NodeIdx, NodeIdx),
+        pdata: P,
+        cdata: C,
     ) {
         self[pidx].add_child(cidx, cdata);
         self[cidx].add_parent(pidx, pdata);

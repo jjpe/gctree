@@ -55,7 +55,7 @@ macro_rules! place_forest {
     ) => {{ #[allow(redundant_semicolons, unused)] {
         let forest: &mut $crate::Forest<_, (), ()> = &mut $arena;
         let node_idx: $crate::NodeIdx = forest.add_node($data);
-        forest.add_edge(($parent_idx, ()), (node_idx, ()));
+        forest.add_edge(($parent_idx, node_idx), (), ());
         $(
             $(
                 place_forest! { [in $arena] node_idx; $children }
@@ -151,12 +151,14 @@ impl<D, P, C> Forest<D, P, C> {
         self.arena.rm_node(node_idx)
     }
 
+    #[inline]
     pub fn add_edge(
         &mut self,
-        (pidx, pdata): (NodeIdx, P),
-        (cidx, cdata): (NodeIdx, C),
+        (pidx, cidx): (NodeIdx, NodeIdx),
+        pdata: P,
+        cdata: C,
     ) {
-        self.arena.add_edge((pidx, pdata), (cidx, cdata))
+        self.arena.add_edge((pidx, cidx), pdata, cdata)
     }
 
     pub fn insert_edge(
@@ -219,7 +221,7 @@ impl<D, P, C> Forest<D, P, C> {
                     .unwrap();
                 (parent_edge.data.clone(), child_edge.data.clone())
             };
-            dst.add_edge((dst_parent_idx, pdata), (dst_node_idx, cdata));
+            dst.add_edge((dst_parent_idx, dst_node_idx), pdata, cdata);
             map.insert(Some(src_node_idx), dst_node_idx);
         }
         Ok(())
@@ -241,8 +243,9 @@ impl<D, P, C> Forest<D, P, C> {
             self.arena.rm_edge(old_parent_idx, subroot_idx)?;
         };
         self.arena.add_edge(
-            (parent_idx, P::default()),
-            (subroot_idx, C::default())
+            (parent_idx, subroot_idx),
+            P::default(),
+            C::default(),
         );
         Ok(())
     }
@@ -723,15 +726,15 @@ mod tests {
         let node20: NodeIdx = forest.add_node("");
         let node200: NodeIdx = forest.add_node("");
         let node21: NodeIdx = forest.add_node("");
-        forest.add_edge((root0,  ()),  (node0, ()));
-        forest.add_edge((node0,  ()),  (node00, ()));
-        forest.add_edge((node0,  ()),  (node01, ()));
-        forest.add_edge((root0,  ()),  (node1, ()));
-        forest.add_edge((node1,  ()),  (node10, ()));
-        forest.add_edge((root0,  ()),  (node2, ()));
-        forest.add_edge((node2,  ()),  (node20, ()));
-        forest.add_edge((node20, ()),  (node200, ()));
-        forest.add_edge((node2,  ()),  (node21, ()));
+        forest.add_edge((root0,  node0),   (), ());
+        forest.add_edge((node0,  node00),  (), ());
+        forest.add_edge((node0,  node01),  (), ());
+        forest.add_edge((root0,  node1),   (), ());
+        forest.add_edge((node1,  node10),  (), ());
+        forest.add_edge((root0,  node2),   (), ());
+        forest.add_edge((node2,  node20),  (), ());
+        forest.add_edge((node20, node200), (), ());
+        forest.add_edge((node2,  node21),  (), ());
         let root1: NodeIdx = forest.add_root(""); // NOTE: <--
         let node3: NodeIdx = forest.add_node("");
         let node30: NodeIdx = forest.add_node("");
@@ -742,15 +745,15 @@ mod tests {
         let node50: NodeIdx = forest.add_node("");
         let node500: NodeIdx = forest.add_node("");
         let node51: NodeIdx = forest.add_node("");
-        forest.add_edge((root1, ()),  (node3, ()));
-        forest.add_edge((node3, ()),  (node30, ()));
-        forest.add_edge((node3, ()),  (node31, ()));
-        forest.add_edge((root1, ()),  (node4, ()));
-        forest.add_edge((node4, ()),  (node40, ()));
-        forest.add_edge((root1, ()),  (node5, ()));
-        forest.add_edge((node5, ()),  (node50, ()));
-        forest.add_edge((node50, ()), (node500, ()));
-        forest.add_edge((node5, ()),  (node51, ()));
+        forest.add_edge((root1,  node3),   (), ());
+        forest.add_edge((node3,  node30),  (), ());
+        forest.add_edge((node3,  node31),  (), ());
+        forest.add_edge((root1,  node4),   (), ());
+        forest.add_edge((node4,  node40),  (), ());
+        forest.add_edge((root1,  node5),   (), ());
+        forest.add_edge((node5,  node50),  (), ());
+        forest.add_edge((node50, node500), (), ());
+        forest.add_edge((node5,  node51),  (), ());
         Ok(Data {
             forest,
             roots: vec![root0, root1],
@@ -1028,9 +1031,9 @@ mod tests {
         let node02_idx = forest.add_node("");
         let node020_idx = forest.add_node("");
         let node0200_idx = forest.add_node("");
-        forest.add_edge((NodeIdx(0),  ()), (node02_idx,   ()));
-        forest.add_edge((node02_idx,  ()), (node020_idx,  ()));
-        forest.add_edge((node020_idx, ()), (node0200_idx, ()));
+        forest.add_edge((NodeIdx(0),  node02_idx),   (), ());
+        forest.add_edge((node02_idx,  node020_idx),  (), ());
+        forest.add_edge((node020_idx, node0200_idx), (), ());
         println!("3 forest:\n\n{forest}\n{forest:#?}\n");
 
         assert_eq!(
