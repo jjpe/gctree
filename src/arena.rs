@@ -97,11 +97,11 @@ impl<D, P, C> Arena<D, P, C> {
         self[src].child_edges().find(|e| e.src == src && e.dst == dst)
     }
 
-    /// Add an edge between `self[pidx]` and `self[cidx]`.
+    /// Add a bidirectional edge between `self[pidx]` and `self[cidx]`.
     /// The former registers the latter as a child, while the latter
     /// registers the former as a parent.
-    /// In addition, `pdata` is assigned to the parent edge i.e. `cidx -> pidx`
-    /// while `cdata` is assigned to the child edge i.e. `pidx -> cidx`.
+    /// In addition, `pdata` is assigned to the parent edge `cidx -> pidx`
+    /// while `cdata` is assigned to the child edge `pidx -> cidx`.
     pub fn add_edge(
         &mut self,
         (pidx, cidx): (NodeIdx, NodeIdx),
