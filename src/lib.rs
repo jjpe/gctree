@@ -4,11 +4,12 @@
 
 mod arena;
 mod node;
-pub mod dag;
 pub mod error;
 pub mod forest;
+pub mod gss;
 
 pub use crate::{
+    gss::{Gss, StackIdx},
     node::{Edge, Node, NodeCount, NodeIdx},
     forest::{Forest, ForestIdx},
 };

@@ -21,6 +21,9 @@ pub enum Error {
     /// I/O error: {0}
     Io(ioe::IoError),
 
+    /// An error originating in a Gss instance: {0:?}
+    GssError(#[from] crate::gss::Error),
+
     /// Detected a cycle: {path:?}
     CycleDetected { path: Vec<NodeIdx> },
     /// Expected Node {0} to be a branch node
