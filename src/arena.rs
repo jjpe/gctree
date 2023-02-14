@@ -275,6 +275,41 @@ impl<D, P, C> Arena<D, P, C> {
         layers.into_iter().flat_map(|layer| layer.into_iter())
     }
 
+
+    pub fn as_d2_diagram(&self, root_idx: NodeIdx) -> String
+    where
+        D: std::fmt::Display,
+        P: std::fmt::Display,
+        C: std::fmt::Display,
+    {
+        let mut buf = String::with_capacity(1024);
+        macro_rules! push_line {
+            ($fmt:expr $(, $args:expr)*) => {{
+                buf.push_str(&format!($fmt $(, $args)*));
+                buf.push_str("\n");
+            }}
+        }
+        for node_idx in self.bfs(root_idx) {
+            let node @ Node { idx, data, .. } = &self[node_idx];
+            push_line!("{idx}: {data}");
+            push_line!("# parent edges:");
+            for (pidx, pdata) in node.parents() {
+                push_line!("{idx} -> {pidx} {{");
+                push_line!("    label: {pdata}");
+                push_line!("    style.stroke: purple");
+                push_line!("}}");
+            }
+            push_line!("# child edges:");
+            for (cidx, cdata) in node.children() {
+                push_line!("{idx} -> {cidx} {{");
+                push_line!("    label: {cdata}");
+                push_line!("    style.stroke: \"#36454F\""); // charcoal
+                push_line!("}}");
+            }
+            buf.push_str("\n");
+        }
+        buf
+    }
 }
 
 impl<D, P, C> std::ops::Index<NodeIdx> for Arena<D, P, C> {
