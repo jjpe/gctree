@@ -73,6 +73,11 @@ impl<D, P, C> Node<D, P, C> {
     }
 
     #[inline(always)]
+    pub fn has_parents(&self) -> bool {
+        self.count_parents() != 0
+    }
+
+    #[inline(always)]
     pub fn add_parent(&mut self, pidx: NodeIdx, pdata: P) {
         self.parents.push((pidx, pdata));
     }
@@ -122,6 +127,11 @@ impl<D, P, C> Node<D, P, C> {
     #[inline(always)]
     pub fn count_children(&self) -> usize {
         self.children.len()
+    }
+
+    #[inline(always)]
+    pub fn has_children(&self) -> bool {
+        self.count_children() != 0
     }
 
     #[inline(always)]
@@ -244,6 +254,10 @@ impl std::fmt::Display for NodeIdx {
     derive_more::From,
 )]
 pub struct NodeCount(usize);
+
+impl NodeCount {
+    pub const ZERO: Self = Self(0);
+}
 
 impl std::ops::Add<Self> for NodeCount {
     type Output = Self;
