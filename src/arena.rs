@@ -7,7 +7,6 @@ use crate::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
-use serde_derive::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt::{self, Debug};
 
@@ -354,14 +353,21 @@ where
     fn deserialize<DE: Deserializer<'de>>(
         d: DE
     ) -> std::result::Result<Self, DE::Error> {
-        #[derive(Deserialize)]
+        #[derive(serde_derive::Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
             Nodes,
             Garbage,
         }
 
-        #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+        #[rustfmt::skip]
+        #[derive(
+            Clone,
+            Debug,
+            PartialEq,
+            serde_derive::Deserialize,
+            serde_derive::Serialize
+        )]
         struct ArenaVisitor<D, P, C>(
             std::marker::PhantomData<D>,
             std::marker::PhantomData<P>,
