@@ -89,11 +89,19 @@ impl<D, P, C> Arena<D, P, C> {
         Ok(())
     }
 
-    pub fn parent_edge(&self, src: NodeIdx, dst: NodeIdx) -> Option<Edge<&P>> {
+    pub fn parent_edge(
+        &self,
+        src: NodeIdx,
+        dst: NodeIdx
+    ) -> Option<Edge<NodeIdx, &P>> {
         self[src].parent_edges().find(|e| e.src == src && e.dst == dst)
     }
 
-    pub fn child_edge(&self, src: NodeIdx, dst: NodeIdx) -> Option<Edge<&C>> {
+    pub fn child_edge(
+        &self,
+        src: NodeIdx,
+        dst: NodeIdx
+    ) -> Option<Edge<NodeIdx, &C>> {
         self[src].child_edges().find(|e| e.src == src && e.dst == dst)
     }
 
@@ -162,10 +170,10 @@ impl<D, P, C> Arena<D, P, C> {
         &mut self,
         parent_idx: NodeIdx,
         child_idx: NodeIdx
-    ) -> Result<()> {
-        self[parent_idx].remove_child(child_idx)?;
-        self[child_idx].remove_parent(parent_idx)?;
-        Ok(())
+    ) -> Result<(P, C)> {
+        let cdata: C = self[parent_idx].remove_child(child_idx)?;
+        let pdata: P = self[child_idx].remove_parent(parent_idx)?;
+        Ok((pdata, cdata))
     }
 
     pub fn self_or_ancestors_of(

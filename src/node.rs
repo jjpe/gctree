@@ -46,8 +46,21 @@ impl<D, P, C> Node<D, P, C> {
     }
 
     #[inline(always)]
-    pub fn parent_edges(&self) -> impl DoubleEndedIterator<Item = Edge<&P>> + '_ {
+    pub fn parent_edges(
+        &self
+    ) -> impl DoubleEndedIterator<Item = Edge<NodeIdx, &P>> + '_ {
         self.parents.iter().map(|(pidx, pdata)| Edge {
+            src: self.idx,
+            dst: *pidx,
+            data: pdata
+        })
+    }
+
+    #[inline(always)]
+    pub fn parent_edges_mut(
+        &mut self
+    ) -> impl DoubleEndedIterator<Item = Edge<NodeIdx, &mut P>> + '_ {
+        self.parents.iter_mut().map(|(pidx, pdata)| Edge {
             src: self.idx,
             dst: *pidx,
             data: pdata
@@ -96,7 +109,9 @@ impl<D, P, C> Node<D, P, C> {
     }
 
     #[inline(always)]
-    pub fn child_edges(&self) -> impl DoubleEndedIterator<Item = Edge<&C>> + '_ {
+    pub fn child_edges(
+        &self
+    ) -> impl DoubleEndedIterator<Item = Edge<NodeIdx, &C>> + '_ {
         self.children.iter().map(|(cidx, cdata)| Edge {
             src: self.idx,
             dst: *cidx,
@@ -247,8 +262,21 @@ impl std::ops::Sub<Self> for NodeCount {
 }
 
 
-pub struct Edge<R> {
-    pub src: NodeIdx,
-    pub dst: NodeIdx,
+#[derive(Debug)]
+pub struct Edge<I, R> {
+    pub src: I,
+    pub dst: I,
     pub data: R,
+}
+
+impl<I, R> std::fmt::Display for Edge<I, R>
+where
+    I: std::fmt::Display,
+    R: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { src, dst, data } = &self;
+        write!(f, "{src}->{dst}, {data}")?;
+        Ok(())
+    }
 }
