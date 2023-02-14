@@ -2,7 +2,7 @@
 name = "gctree"
 version = "0.13.0"
 edition = "2021"
-description = "A cache-friendly, garbage-collecting tree structure."
+description = "A library for cache-friendly, graph-like, arena-allocated datastructures."
 license = "MIT"
 documentation = "https://docs.rs/gctree"
 repository = "https://github.com/jjpe/gctree"
