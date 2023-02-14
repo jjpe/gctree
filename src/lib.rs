@@ -9,6 +9,6 @@ pub mod error;
 pub mod forest;
 
 pub use crate::{
-    forest::Forest,
     node::{Edge, Node, NodeCount, NodeIdx},
+    forest::{Forest, ForestIdx},
 };

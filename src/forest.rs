@@ -54,7 +54,7 @@ macro_rules! place_forest {
         ($data:expr $(, $($children:tt),+)?)
     ) => {{ #[allow(redundant_semicolons, unused)] {
         let forest: &mut $crate::Forest<_, (), ()> = &mut $arena;
-        let node_idx: $crate::NodeIdx = forest.add_node($data);
+        let node_idx: $crate::ForestIdx = forest.add_node($data);
         forest.add_edge(($parent_idx, node_idx), (), ());
         $(
             $(
@@ -69,7 +69,7 @@ macro_rules! place_forest {
 #[derive(Clone, Debug, Hash)]
 pub struct Forest<D, P, C> {
     arena: Arena<D, P, C>,
-    roots: VecDeque<NodeIdx>,
+    roots: VecDeque<ForestIdx>,
 }
 
 impl<D, P, C> Default for Forest<D, P, C> {
@@ -106,7 +106,7 @@ impl<D, P, C> Forest<D, P, C> {
         self.arena.garbage_size()
     }
 
-    pub fn roots(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
+    pub fn roots(&self) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
         let (front, back) = self.roots.as_slices();
         std::iter::empty()
             .chain(front.iter().copied())
@@ -114,10 +114,17 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     #[inline]
-    pub fn add_root(&mut self, data: D) -> NodeIdx {
-        let root_idx = self.arena.add_node(data);
+    pub fn add_root(&mut self, data: D) -> ForestIdx {
+        let root_idx = self.add_node(data);
         self.roots.push_back(root_idx);
         root_idx
+    }
+
+    #[inline]
+    pub fn rm_root(&mut self, fidx: ForestIdx) {
+        if let Some(pos) = self.roots.iter().position(|&root| root == fidx) {
+            self.roots.remove(pos);
+        }
     }
 
     #[inline]
@@ -125,7 +132,7 @@ impl<D, P, C> Forest<D, P, C> {
         self.roots.len()
     }
 
-    pub fn pop_n_roots(&mut self, n: usize) -> Vec<NodeIdx> {
+    pub fn pop_n_roots(&mut self, n: usize) -> Vec<ForestIdx> {
         let nroots = self.count_roots();
         debug_assert!(nroots >= n, "Cannot remove {n} roots; Found only {nroots}");
         let mut root_idxs = vec![];
@@ -138,8 +145,8 @@ impl<D, P, C> Forest<D, P, C> {
 
     /// If there is a garbage `Node<D>`in `self`, recycle it.
     /// Otherwise, allocate a new one.
-    pub fn add_node(&mut self, data: D) -> NodeIdx {
-        self.arena.add_node(data)
+    pub fn add_node(&mut self, data: D) -> ForestIdx {
+        ForestIdx(self.arena.add_node(data))
     }
 
     #[inline]
@@ -147,38 +154,38 @@ impl<D, P, C> Forest<D, P, C> {
     /// Recycle `self[node_idx]`.  Since a node conceptually owns
     /// its children, all descendant nodes and all edges between
     /// them are removed as well.
-    pub fn rm_node(&mut self, node_idx: NodeIdx) -> Result<()> {
-        self.arena.rm_node(node_idx)
+    pub fn rm_node(&mut self, fidx: ForestIdx) -> Result<()> {
+        self.arena.rm_node(*fidx)
     }
 
     #[inline]
     pub fn add_edge(
         &mut self,
-        (pidx, cidx): (NodeIdx, NodeIdx),
+        (pidx, cidx): (ForestIdx, ForestIdx),
         pdata: P,
         cdata: C,
     ) {
-        self.arena.add_edge((pidx, cidx), pdata, cdata)
+        self.arena.add_edge((*pidx, *cidx), pdata, cdata)
     }
 
     pub fn insert_edge(
         &mut self,
-        (pidx, pdata, ppos): (NodeIdx, P, Option<usize>),
-        (cidx, cdata, cpos): (NodeIdx, C, Option<usize>),
+        (pidx, pdata, ppos): (ForestIdx, P, Option<usize>),
+        (cidx, cdata, cpos): (ForestIdx, C, Option<usize>),
     ) {
         self.arena.insert_edge(
-            (pidx, pdata, ppos),
-            (cidx, cdata, cpos)
+            (*pidx, pdata, ppos),
+            (*cidx, cdata, cpos)
         )
     }
 
     #[must_use]
     pub fn rm_edge(
         &mut self,
-        parent_idx: NodeIdx,
-        child_idx: NodeIdx
-    ) -> Result<()> {
-        self.arena.rm_edge(parent_idx, child_idx)
+        parent_idx: ForestIdx,
+        child_idx: ForestIdx
+    ) -> Result<(P, C)> {
+        self.arena.rm_edge(*parent_idx, *child_idx)
     }
 
     #[must_use]
@@ -186,20 +193,20 @@ impl<D, P, C> Forest<D, P, C> {
     /// Copy the subtree (rooted in `root_idx`) in `src` tree to `self`,
     /// making it a subtree of `self` in the process.  Specifically,
     /// `src[root_idx]` becomes a child node of `self[dst_node_idx]`.
-    /// Note that the `NodeIdx`s of the nodes in `src` will *NOT* be
+    /// Note that the `ForestIdx`s of the nodes in `src` will *NOT* be
     /// valid in `self`.
     pub fn copy_subtree(
         &mut self,
-        dst_node_idx: NodeIdx,
-        (src, root_idx): (&Self, NodeIdx),
+        dst_node_idx: ForestIdx,
+        (src, root_idx): (&Self, ForestIdx),
     ) -> Result<()>
     where
         D: Clone,
         P: Clone + Default,
         C: Clone + Default,
     {
-        type SrcTreeIdx = Option<NodeIdx>;
-        type DstTreeIdx = NodeIdx;
+        type SrcTreeIdx = Option<ForestIdx>;
+        type DstTreeIdx = ForestIdx;
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
         let (src, dst) = (src, self);
@@ -214,10 +221,10 @@ impl<D, P, C> Forest<D, P, C> {
                 // NOTE: `src[src_node_idx]` has a parent edge
                 let src_parent_idx = src_parent_idx.unwrap();
                 let parent_edge = src.arena
-                    .parent_edge(src_node_idx, src_parent_idx)
+                    .parent_edge(*src_node_idx, *src_parent_idx)
                     .unwrap();
                 let child_edge = src.arena
-                    .child_edge(src_parent_idx, src_node_idx)
+                    .child_edge(*src_parent_idx, *src_node_idx)
                     .unwrap();
                 (parent_edge.data.clone(), child_edge.data.clone())
             };
@@ -232,18 +239,18 @@ impl<D, P, C> Forest<D, P, C> {
     /// Make `self[subroot_idx]` the last child node of `self[parent_idx]`.
     pub fn move_subtree(
         &mut self,
-        parent_idx: NodeIdx,
-        subroot_idx: NodeIdx,
+        parent_idx: ForestIdx,
+        subroot_idx: ForestIdx,
     ) -> Result<()>
     where
         C: Default,
         P: Default,
     {
         if let Some(old_parent_idx) = self.parent_of(subroot_idx) {
-            self.arena.rm_edge(old_parent_idx, subroot_idx)?;
+            self.arena.rm_edge(*old_parent_idx, *subroot_idx)?;
         };
         self.arena.add_edge(
-            (parent_idx, subroot_idx),
+            (*parent_idx, *subroot_idx),
             P::default(),
             C::default(),
         );
@@ -256,22 +263,22 @@ impl<D, P, C> Forest<D, P, C> {
     /// is removed from `self` and `self[subroot_idx]` takes its place.
     pub fn replace_subtree(
         &mut self,
-        target_idx: NodeIdx,
-        subroot_idx: NodeIdx,
+        target_idx: ForestIdx,
+        subroot_idx: ForestIdx,
     ) -> Result<()>
     where
         P: Default,
         C: Default,
     {
         if let Some(parent_idx) = self.parent_of(subroot_idx) {
-            self.arena.rm_edge(parent_idx, subroot_idx)?;
+            self.arena.rm_edge(*parent_idx, *subroot_idx)?;
         }
         if let Some(parent_idx) = self.parent_of(target_idx) {
-            let child_pos = self[parent_idx].get_child_ordinal(target_idx);
-            self.arena.rm_edge(parent_idx, target_idx)?;
+            let child_pos = self[parent_idx].get_child_ordinal(*target_idx);
+            self.arena.rm_edge(*parent_idx, *target_idx)?;
             self.arena.insert_edge(
-                (parent_idx,  P::default(), None),
-                (subroot_idx, C::default(), child_pos),
+                (*parent_idx,  P::default(), None),
+                (*subroot_idx, C::default(), child_pos),
             );
         }
         self.rm_subtree(target_idx)?;
@@ -280,17 +287,17 @@ impl<D, P, C> Forest<D, P, C> {
 
     #[inline]
     #[must_use]
-    pub fn rm_subtree(&mut self, root_idx: NodeIdx) -> Result<()> {
-        self.rm_node(root_idx)
+    pub fn rm_subtree(&mut self, fidx: ForestIdx) -> Result<()> {
+        self.rm_node(fidx)
     }
 
     #[must_use]
     /// Remove all descendant nodes of `self[node_idx]`, but
     /// not `self[node_idx]` itself.
-    pub fn rm_descendants_of(&mut self, node_idx: NodeIdx) -> Result<()> {
-        let children: Vec<_> = self[node_idx].child_idxs().collect();
-        for &child_idx in &children {
-            self.rm_edge(node_idx, child_idx)?;
+    pub fn rm_descendants_of(&mut self, fidx: ForestIdx) -> Result<()> {
+        let children: Vec<_> = self[fidx].child_idxs().collect();
+        for child_idx in children.into_iter().map(ForestIdx) {
+            self.rm_edge(fidx, child_idx)?;
             self.rm_subtree(child_idx)?;
         }
         Ok(())
@@ -299,123 +306,132 @@ impl<D, P, C> Forest<D, P, C> {
     #[inline(always)]
     pub fn self_or_ancestors_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.self_or_ancestors_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.self_or_ancestors_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn ancestors_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.ancestors_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.ancestors_of(*fidx).map(ForestIdx)
     }
 
     #[inline]
-    pub fn parent_of(&self, node_idx: NodeIdx) -> Option<NodeIdx> {
-        self[node_idx].parents.get(0).map(|(pidx, _pdata)| *pidx)
+    pub fn parent_of(&self, node_idx: ForestIdx) -> Option<ForestIdx> {
+        self[node_idx].parents.get(0).map(|(pidx, _pdata)| ForestIdx(*pidx))
     }
 
     #[inline(always)]
     pub fn self_or_siblings_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.self_or_siblings_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.self_or_siblings_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn siblings_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.siblings_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.siblings_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn children_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.children_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.children_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn self_or_descendants_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.self_or_descendants_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.self_or_descendants_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn descendants_of(
         &self,
-        node_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.arena.descendants_of(node_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
+        self.arena.descendants_of(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn dfs(
         &self,
-        start_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        self.arena.dfs(start_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> {
+        self.arena.dfs(*fidx).map(ForestIdx)
     }
 
     #[inline(always)]
     pub fn bfs(
         &self,
-        start_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        self.arena.bfs(start_idx)
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> {
+        self.arena.bfs(*fidx).map(ForestIdx)
     }
 
     #[inline]
     #[must_use]
-    pub fn ensure_node_is_branch(&self, node_idx: NodeIdx) -> Result<()> {
-        if self[node_idx].is_branch_node() {
+    pub fn ensure_node_is_branch(&self, fidx: ForestIdx) -> Result<()> {
+        if self[fidx].is_branch_node() {
             Ok(())
         } else {
-            Err(Error::ExpectedBranchNode(node_idx))
+            Err(Error::ExpectedBranchNode(*fidx))
         }
     }
 
     #[inline]
     #[must_use]
-    pub fn ensure_node_is_leaf(&self, node_idx: NodeIdx) -> Result<()> {
-        if self[node_idx].is_leaf_node() {
+    pub fn ensure_node_is_leaf(&self, fidx: ForestIdx) -> Result<()> {
+        if self[fidx].is_leaf_node() {
             Ok(())
         } else {
-            Err(Error::ExpectedLeafNode(node_idx))
+            Err(Error::ExpectedLeafNode(*fidx))
         }
     }
 
     #[inline]
     #[must_use]
-    pub fn ensure_node_is_root(&self, node_idx: NodeIdx) -> Result<()> {
-        if self[node_idx].is_root_node() {
+    pub fn ensure_node_is_root(&self, fidx: ForestIdx) -> Result<()> {
+        if self[fidx].is_root_node() {
             Ok(())
         } else {
-            Err(Error::ExpectedRootNode(node_idx))
+            Err(Error::ExpectedRootNode(*fidx))
         }
     }
 
+    #[inline]
+    pub fn as_d2_diagram(&self, root_idx: NodeIdx) -> String
+    where
+        D: std::fmt::Display,
+        P: std::fmt::Display,
+        C: std::fmt::Display,
+    {
+        self.arena.as_d2_diagram(root_idx)
+    }
 }
 
-impl<D, P, C> std::ops::Index<NodeIdx> for Forest<D, P, C> {
+impl<D, P, C> std::ops::Index<ForestIdx> for Forest<D, P, C> {
     type Output = Node<D, P, C>;
 
-    fn index(&self, idx: NodeIdx) -> &Self::Output {
-        &self.arena[idx]
+    fn index(&self, idx: ForestIdx) -> &Self::Output {
+        &self.arena[*idx]
     }
 }
 
-impl<D, P, C> std::ops::IndexMut<NodeIdx> for Forest<D, P, C> {
-    fn index_mut(&mut self, idx: NodeIdx) -> &mut Self::Output {
-        &mut self.arena[idx]
+impl<D, P, C> std::ops::IndexMut<ForestIdx> for Forest<D, P, C> {
+    fn index_mut(&mut self, idx: ForestIdx) -> &mut Self::Output {
+        &mut self.arena[*idx]
     }
 }
 
@@ -444,7 +460,9 @@ where
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
                     (&[], &[]) => {/*NOP*/}
-                    (&[(spidx, _)], &[(opidx, _)]) if map[&spidx] == opidx => {
+                    (&[(spidx, _)], &[(opidx, _)])
+                        if map[&ForestIdx(spidx)] == ForestIdx(opidx) =>
+                    {
                         // NOP
                     }
                     _ => return false,
@@ -494,7 +512,9 @@ where
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
                     (&[], &[]) => {/*NOP*/}
-                    (&[(spidx, _)], &[(opidx, _)]) if map[&spidx] == opidx => {
+                    (&[(spidx, _)], &[(opidx, _)])
+                        if map[&ForestIdx(spidx)] == ForestIdx(opidx) =>
+                    {
                         // NOP
                     }
                     _ => return snode.parents.partial_cmp(&onode.parents),
@@ -540,7 +560,9 @@ where
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
                     (&[], &[]) => {/*NOP*/}
-                    (&[(spidx, _)], &[(opidx, _)]) if map[&spidx] == opidx => {
+                    (&[(spidx, _)], &[(opidx, _)])
+                        if map[&ForestIdx(spidx)] == ForestIdx(opidx) =>
+                    {
                         // NOP
                     }
                     _ => return snode.parents.cmp(&onode.parents),
@@ -697,6 +719,49 @@ where
 }
 
 
+
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde_derive::Deserialize,
+    serde_derive::Serialize,
+    derive_more::From,
+)]
+pub struct ForestIdx(NodeIdx);
+
+impl std::fmt::Debug for ForestIdx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ForestIdx({})", self.0)
+    }
+}
+
+impl std::fmt::Display for ForestIdx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ForestIdx({})", self.0)
+    }
+}
+
+impl From<usize> for ForestIdx {
+    fn from(idx: usize) -> Self {
+        Self(NodeIdx::from(idx))
+    }
+}
+
+impl std::ops::Deref for ForestIdx {
+    type Target = NodeIdx;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -704,28 +769,28 @@ mod tests {
     #[derive(Debug)]
     struct Data {
         forest: Forest<&'static str, (), ()>,
-        roots: Vec<NodeIdx>,
-        bfs_order0: Vec<NodeIdx>,
-        bfs_order1: Vec<NodeIdx>,
-        dfs_order0: Vec<NodeIdx>,
-        dfs_order1: Vec<NodeIdx>,
-        subtree_bfs_order: Vec<NodeIdx>,
-        subtree_dfs_order: Vec<NodeIdx>,
+        roots: Vec<ForestIdx>,
+        bfs_order0: Vec<ForestIdx>,
+        bfs_order1: Vec<ForestIdx>,
+        dfs_order0: Vec<ForestIdx>,
+        dfs_order1: Vec<ForestIdx>,
+        subtree_bfs_order: Vec<ForestIdx>,
+        subtree_dfs_order: Vec<ForestIdx>,
     }
 
     #[rustfmt::skip]
     fn make_data() -> Result<Data> {
         let mut forest: Forest<&str, (), ()> = Forest::default();
-        let root0: NodeIdx = forest.add_root(""); // NOTE: <--
-        let node0: NodeIdx = forest.add_node("");
-        let node00: NodeIdx = forest.add_node("");
-        let node01: NodeIdx = forest.add_node("");
-        let node1: NodeIdx = forest.add_node("");
-        let node10: NodeIdx = forest.add_node("");
-        let node2: NodeIdx = forest.add_node("");
-        let node20: NodeIdx = forest.add_node("");
-        let node200: NodeIdx = forest.add_node("");
-        let node21: NodeIdx = forest.add_node("");
+        let root0: ForestIdx = forest.add_root(""); // NOTE: <--
+        let node0: ForestIdx = forest.add_node("");
+        let node00: ForestIdx = forest.add_node("");
+        let node01: ForestIdx = forest.add_node("");
+        let node1: ForestIdx = forest.add_node("");
+        let node10: ForestIdx = forest.add_node("");
+        let node2: ForestIdx = forest.add_node("");
+        let node20: ForestIdx = forest.add_node("");
+        let node200: ForestIdx = forest.add_node("");
+        let node21: ForestIdx = forest.add_node("");
         forest.add_edge((root0,  node0),   (), ());
         forest.add_edge((node0,  node00),  (), ());
         forest.add_edge((node0,  node01),  (), ());
@@ -735,16 +800,16 @@ mod tests {
         forest.add_edge((node2,  node20),  (), ());
         forest.add_edge((node20, node200), (), ());
         forest.add_edge((node2,  node21),  (), ());
-        let root1: NodeIdx = forest.add_root(""); // NOTE: <--
-        let node3: NodeIdx = forest.add_node("");
-        let node30: NodeIdx = forest.add_node("");
-        let node31: NodeIdx = forest.add_node("");
-        let node4: NodeIdx = forest.add_node("");
-        let node40: NodeIdx = forest.add_node("");
-        let node5: NodeIdx = forest.add_node("");
-        let node50: NodeIdx = forest.add_node("");
-        let node500: NodeIdx = forest.add_node("");
-        let node51: NodeIdx = forest.add_node("");
+        let root1: ForestIdx = forest.add_root(""); // NOTE: <--
+        let node3: ForestIdx = forest.add_node("");
+        let node30: ForestIdx = forest.add_node("");
+        let node31: ForestIdx = forest.add_node("");
+        let node4: ForestIdx = forest.add_node("");
+        let node40: ForestIdx = forest.add_node("");
+        let node5: ForestIdx = forest.add_node("");
+        let node50: ForestIdx = forest.add_node("");
+        let node500: ForestIdx = forest.add_node("");
+        let node51: ForestIdx = forest.add_node("");
         forest.add_edge((root1,  node3),   (), ());
         forest.add_edge((node3,  node30),  (), ());
         forest.add_edge((node3,  node31),  (), ());
@@ -858,7 +923,7 @@ mod tests {
              ("node2",
               ("node20")))
         };
-        let node20 = NodeIdx(6);
+        let node20 = ForestIdx::from(6);
 
         let mut subtree = forest! {
             ("root (subtree)",
@@ -869,7 +934,7 @@ mod tests {
              ("node2 (subtree)",
               ("node20 (subtree)")))
         };
-        let subtree_root = NodeIdx(0);
+        let subtree_root = ForestIdx::from(0);
 
         forest.copy_subtree(node20, (&subtree, subtree_root))?;
 
@@ -898,7 +963,7 @@ mod tests {
     #[allow(unused)]
     fn remove_subtree() -> Result<()> {
         let mut data = make_data()?;
-        let node0 = NodeIdx(1);
+        let node0 = ForestIdx::from(1);
         data.forest.rm_subtree(node0)?;
         let subtree_bfs_order: Vec<_> = data.forest.bfs(data.roots[0]).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
@@ -910,7 +975,7 @@ mod tests {
     #[test]
     fn remove_subtree_multiply() -> Result<()> {
         let mut data = make_data()?;
-        let node0 = NodeIdx(1);
+        let node0 = ForestIdx::from(1);
 
         println!("initial:\n{}\n{:#?}", data.forest, data.forest);
         // assert!(data.forest.garbage.is_empty());
@@ -937,7 +1002,7 @@ mod tests {
         let data = make_data()?;
         let mut forest = data.forest.clone();
 
-        let (parent_idx, subroot_idx) = (NodeIdx(1), NodeIdx(6));
+        let (parent_idx, subroot_idx) = (ForestIdx::from(1), ForestIdx::from(6));
         // Make `tree[subroot_idx]` a child of `tree[parent_idx]`,
         // i.e. move the subtree rooted in `tree[subroot_idx]`:
         println!("0 forest:\n{forest}");
@@ -971,7 +1036,7 @@ mod tests {
             "\nforest:\n{forest}\n    !=\nexpected:\n{expected}"
         );
 
-        let (parent_idx, subroot_idx) = (NodeIdx(0), NodeIdx(6));
+        let (parent_idx, subroot_idx) = (ForestIdx::from(0), ForestIdx::from(6));
         // Make `tree[subroot_idx]` a child of its grandparent,
         // i.e. move the subtree back:
         forest.move_subtree(parent_idx, subroot_idx)?;
@@ -991,70 +1056,97 @@ mod tests {
         let mut forest = data.forest;
         println!("0 forest:\n\n{forest}\n{forest:#?}\n");
 
-        let (target_idx, subroot_idx) = (NodeIdx(2), NodeIdx(6));
+        let (target_idx, subroot_idx) = (ForestIdx::from(2), ForestIdx::from(6));
         // Replace `self[target_idx]` with `self[subroot_idx]`:
         forest.replace_subtree(target_idx, subroot_idx)?;
         println!("1 forest:\n\n{forest}\n{forest:#?}\n");
 
-        assert_eq!(forest[NodeIdx(0)].children, [(NodeIdx(1), ()), (NodeIdx(4), ())]);
-        assert_eq!(forest[NodeIdx(1)].children, [(NodeIdx(6), ()), (NodeIdx(3), ())]);
-        assert_eq!(forest[NodeIdx(6)].children, [(NodeIdx(7), ()), (NodeIdx(9), ())]);
-        assert_eq!(forest[NodeIdx(7)].children, [(NodeIdx(8), ())]);
-        assert_eq!(forest[NodeIdx(4)].children, [(NodeIdx(5), ())]);
-        assert_eq!(forest.parent_of(NodeIdx(0)), None);
-        assert_eq!(forest.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(4)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(6)), Some(NodeIdx(1)));
-        assert_eq!(forest.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
-        assert_eq!(forest.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
-        assert_eq!(forest.parent_of(NodeIdx(5)), Some(NodeIdx(4)));
+        assert_eq!(
+            forest[ForestIdx::from(0)].children,
+            [(NodeIdx(1), ()), (NodeIdx(4), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(1)].children,
+            [(NodeIdx(6), ()), (NodeIdx(3), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(6)].children,
+            [(NodeIdx(7), ()), (NodeIdx(9), ())]
+        );
+        assert_eq!(forest[ForestIdx::from(7)].children, [(NodeIdx(8), ())]);
+        assert_eq!(forest[ForestIdx::from(4)].children, [(NodeIdx(5), ())]);
+        assert_eq!(forest.parent_of(ForestIdx::from(0)), None);
+        assert_eq!(forest.parent_of(ForestIdx::from(1)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(4)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(6)), Some(ForestIdx::from(1)));
+        assert_eq!(forest.parent_of(ForestIdx::from(3)), Some(ForestIdx::from(1)));
+        assert_eq!(forest.parent_of(ForestIdx::from(7)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(9)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(8)), Some(ForestIdx::from(7)));
+        assert_eq!(forest.parent_of(ForestIdx::from(5)), Some(ForestIdx::from(4)));
 
-        let (target_idx, subroot_idx) = (NodeIdx(4), NodeIdx(6));
+        let (target_idx, subroot_idx) = (ForestIdx::from(4), ForestIdx::from(6));
         // Replace `self[target_idx]` with `self[subroot_idx]`:
         forest.replace_subtree(target_idx, subroot_idx)?;
         println!("2 forest:\n\n{forest}\n{forest:#?}\n");
 
-        assert_eq!(forest[NodeIdx(0)].children, [(NodeIdx(1), ()), (NodeIdx(6), ())]);
-        assert_eq!(forest[NodeIdx(1)].children, [(NodeIdx(3), ())]);
-        assert_eq!(forest[NodeIdx(6)].children, [(NodeIdx(7), ()), (NodeIdx(9), ())]);
-        assert_eq!(forest[NodeIdx(7)].children, [(NodeIdx(8), ())]);
-        assert_eq!(forest.parent_of(NodeIdx(0)), None);
-        assert_eq!(forest.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(6)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
-        assert_eq!(forest.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
+        assert_eq!(
+            forest[ForestIdx::from(0)].children,
+            [(NodeIdx(1), ()), (NodeIdx(6), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(1)].children,
+            [(NodeIdx(3), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(6)].children,
+            [(NodeIdx(7), ()), (NodeIdx(9), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(7)].children,
+            [(NodeIdx(8), ())]
+        );
+        assert_eq!(forest.parent_of(ForestIdx::from(0)), None);
+        assert_eq!(forest.parent_of(ForestIdx::from(1)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(6)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(3)), Some(ForestIdx::from(1)));
+        assert_eq!(forest.parent_of(ForestIdx::from(7)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(9)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(8)), Some(ForestIdx::from(7)));
 
         let node02_idx = forest.add_node("");
         let node020_idx = forest.add_node("");
         let node0200_idx = forest.add_node("");
-        forest.add_edge((NodeIdx(0),  node02_idx),   (), ());
+        forest.add_edge((ForestIdx::from(0),  node02_idx),   (), ());
         forest.add_edge((node02_idx,  node020_idx),  (), ());
         forest.add_edge((node020_idx, node0200_idx), (), ());
         println!("3 forest:\n\n{forest}\n{forest:#?}\n");
 
         assert_eq!(
-            forest[NodeIdx(0)].children,
+            forest[ForestIdx::from(0)].children,
             [(NodeIdx(1), ()), (NodeIdx(6), ()), (NodeIdx(2), ())]
         );
-        assert_eq!(forest[NodeIdx(1)].children, [(NodeIdx(3), ())]);
-        assert_eq!(forest[NodeIdx(6)].children, [(NodeIdx(7), ()), (NodeIdx(9), ())]);
-        assert_eq!(forest[NodeIdx(7)].children, [(NodeIdx(8), ())]);
-        assert_eq!(forest[NodeIdx(2)].children, [(NodeIdx(5), ())]);
-        assert_eq!(forest[NodeIdx(5)].children, [(NodeIdx(4), ())]);
-        assert_eq!(forest.parent_of(NodeIdx(0)), None);
-        assert_eq!(forest.parent_of(NodeIdx(1)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(6)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(2)), Some(NodeIdx(0)));
-        assert_eq!(forest.parent_of(NodeIdx(3)), Some(NodeIdx(1)));
-        assert_eq!(forest.parent_of(NodeIdx(7)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(9)), Some(NodeIdx(6)));
-        assert_eq!(forest.parent_of(NodeIdx(8)), Some(NodeIdx(7)));
-        assert_eq!(forest.parent_of(NodeIdx(5)), Some(NodeIdx(2)));
-        assert_eq!(forest.parent_of(NodeIdx(4)), Some(NodeIdx(5)));
+        assert_eq!(
+            forest[ForestIdx::from(1)].children,
+            [(NodeIdx(3), ())]
+        );
+        assert_eq!(
+            forest[ForestIdx::from(6)].children,
+            [(NodeIdx(7), ()), (NodeIdx(9), ())]
+        );
+        assert_eq!(forest[ForestIdx::from(7)].children, [(NodeIdx(8), ())]);
+        assert_eq!(forest[ForestIdx::from(2)].children, [(NodeIdx(5), ())]);
+        assert_eq!(forest[ForestIdx::from(5)].children, [(NodeIdx(4), ())]);
+        assert_eq!(forest.parent_of(ForestIdx::from(0)), None);
+        assert_eq!(forest.parent_of(ForestIdx::from(1)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(6)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(2)), Some(ForestIdx::from(0)));
+        assert_eq!(forest.parent_of(ForestIdx::from(3)), Some(ForestIdx::from(1)));
+        assert_eq!(forest.parent_of(ForestIdx::from(7)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(9)), Some(ForestIdx::from(6)));
+        assert_eq!(forest.parent_of(ForestIdx::from(8)), Some(ForestIdx::from(7)));
+        assert_eq!(forest.parent_of(ForestIdx::from(5)), Some(ForestIdx::from(2)));
+        assert_eq!(forest.parent_of(ForestIdx::from(4)), Some(ForestIdx::from(5)));
 
         Ok(())
     }
@@ -1064,12 +1156,14 @@ mod tests {
     fn rm_descendants_of() -> Result<()> {
         let mut data = make_data()?;
         println!("forest 0:\n{}", data.forest);
-        data.forest.rm_descendants_of(NodeIdx(6))?;
+        data.forest.rm_descendants_of(ForestIdx::from(6))?;
         println!("forest 1:\n{}", data.forest);
-        assert!(data.forest[NodeIdx(6)].children.is_empty());
+        assert!(data.forest[ForestIdx::from(6)].children.is_empty());
         let root0_idx = data.forest.roots().nth(0).unwrap();
-        let expected = &[(NodeIdx(1), ()), (NodeIdx(4), ()), (NodeIdx(6), ())];
-        assert_eq!(&data.forest[root0_idx].children, expected);
+        assert_eq!(
+            &data.forest[root0_idx].children,
+            &[(NodeIdx(1), ()), (NodeIdx(4), ()), (NodeIdx(6), ())]
+        );
         Ok(())
     }
 
@@ -1077,10 +1171,13 @@ mod tests {
     fn ancestors_of() -> Result<()> {
         let data = make_data()?;
         println!("forest:\n{}", data.forest);
-        let node_idx = NodeIdx(8);
+        let node_idx = ForestIdx::from(8);
         let ancestors: Vec<_> = data.forest.ancestors_of(node_idx).collect();
         println!("ancestor indices:\n{:?}", ancestors);
-        assert_eq!(ancestors, &[NodeIdx(7), NodeIdx(6), NodeIdx(0)]);
+        assert_eq!(
+            ancestors,
+            &[ForestIdx::from(7), ForestIdx::from(6), ForestIdx::from(0)]
+        );
         Ok(())
     }
 
@@ -1088,10 +1185,10 @@ mod tests {
     fn siblings_of() -> Result<()> {
         let data = make_data()?;
         println!("forest:\n{}", data.forest);
-        let node_idx = NodeIdx(4);
+        let node_idx = ForestIdx::from(4);
         let siblings: Vec<_> = data.forest.siblings_of(node_idx).collect();
         println!("sibling indices:\n{:?}", siblings);
-        assert_eq!(siblings, &[NodeIdx(1), NodeIdx(6)]);
+        assert_eq!(siblings, &[ForestIdx::from(1), ForestIdx::from(6)]);
         Ok(())
     }
 
@@ -1099,10 +1196,10 @@ mod tests {
     fn children_of() -> Result<()> {
         let data = make_data()?;
         println!("forest:\n{}", data.forest);
-        let node_idx = NodeIdx(1);
+        let node_idx = ForestIdx::from(1);
         let children: Vec<_> = data.forest.children_of(node_idx).collect();
         println!("child indices:\n{:?}", children);
-        assert_eq!(children, &[NodeIdx(2), NodeIdx(3)]);
+        assert_eq!(children, &[ForestIdx::from(2), ForestIdx::from(3)]);
         Ok(())
     }
 
@@ -1110,10 +1207,13 @@ mod tests {
     fn descendants_of() -> Result<()> {
         let data = make_data()?;
         println!("forest:\n{}", data.forest);
-        let node_idx = NodeIdx(6);
+        let node_idx = ForestIdx::from(6);
         let descendants: Vec<_> = data.forest.descendants_of(node_idx).collect();
         println!("descendant indices:\n{:?}", descendants);
-        assert_eq!(descendants, &[NodeIdx(7), NodeIdx(8), NodeIdx(9)]);
+        assert_eq!(
+            descendants,
+            &[ForestIdx::from(7), ForestIdx::from(8), ForestIdx::from(9)]
+        );
         Ok(())
     }
 
