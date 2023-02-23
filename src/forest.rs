@@ -742,7 +742,7 @@ impl std::fmt::Debug for ForestIdx {
 
 impl std::fmt::Display for ForestIdx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ForestIdx({})", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
