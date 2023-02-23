@@ -160,16 +160,6 @@ impl<D, P, C> Node<D, P, C> {
         Ok(cdata)
     }
 
-    // #[inline(always)]
-    // pub fn clear(&mut self)
-    // where
-    //     D: Default,
-    // {
-    //     self.parents.clear();
-    //     self.children.clear();
-    //     self.data = D::default();
-    // }
-
     #[inline]
     #[rustfmt::skip]
     /// Assuming that `parent_idx` is a member of `self.parents`, return the
