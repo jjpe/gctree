@@ -122,9 +122,9 @@ impl<D, P, C> Forest<D, P, C> {
 
     #[inline]
     pub fn rm_root(&mut self, fidx: ForestIdx) {
-        if let Some(pos) = self.roots.iter().position(|&root| root == fidx) {
-            self.roots.remove(pos);
-        }
+        self.roots = self.roots.drain(..)
+            .filter(|&root| root != fidx)
+            .collect();
     }
 
     #[inline]
@@ -155,7 +155,11 @@ impl<D, P, C> Forest<D, P, C> {
     /// its children, all descendant nodes and all edges between
     /// them are removed as well.
     pub fn rm_node(&mut self, fidx: ForestIdx) -> Result<()> {
-        self.arena.rm_node(*fidx)
+        self.arena.rm_node(*fidx)?;
+        if self.roots.contains(&fidx) {
+            self.rm_root(fidx);
+        }
+        Ok(())
     }
 
     #[inline]
@@ -165,6 +169,9 @@ impl<D, P, C> Forest<D, P, C> {
         pdata: P,
         cdata: C,
     ) {
+        if self.roots.contains(&cidx) {
+            self.rm_root(cidx);
+        }
         self.arena.add_edge((*pidx, *cidx), pdata, cdata)
     }
 
@@ -173,6 +180,9 @@ impl<D, P, C> Forest<D, P, C> {
         (pidx, pdata, ppos): (ForestIdx, P, Option<usize>),
         (cidx, cdata, cpos): (ForestIdx, C, Option<usize>),
     ) {
+        if self.roots.contains(&cidx) {
+            self.rm_root(cidx);
+        }
         self.arena.insert_edge(
             (*pidx, pdata, ppos),
             (*cidx, cdata, cpos)
@@ -185,7 +195,11 @@ impl<D, P, C> Forest<D, P, C> {
         parent_idx: ForestIdx,
         child_idx: ForestIdx
     ) -> Result<(P, C)> {
-        self.arena.rm_edge(*parent_idx, *child_idx)
+        let result = self.arena.rm_edge(*parent_idx, *child_idx)?;
+        if !self[child_idx].has_parents() {
+            self.roots.push_back(child_idx);
+        }
+        Ok(result)
     }
 
     #[must_use]
