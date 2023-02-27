@@ -175,6 +175,7 @@ impl<D, P, C> Forest<D, P, C> {
         self.arena.add_edge((*pidx, *cidx), pdata, cdata)
     }
 
+    #[inline]
     pub fn insert_edge(
         &mut self,
         (pidx, pdata, ppos): (ForestIdx, P, Option<usize>),
@@ -189,6 +190,7 @@ impl<D, P, C> Forest<D, P, C> {
         )
     }
 
+    #[inline]
     #[must_use]
     pub fn rm_edge(
         &mut self,
