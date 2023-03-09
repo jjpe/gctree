@@ -6,6 +6,9 @@ use crate::{
     node::{Edge, Node, NodeIdx}, NodeCount,
 };
 // use itertools::iproduct;
+#[cfg(feature = "d2-graphs")] use crate::d2graphs::{
+    D2Edge, D2Graph, D2Node, D2NodeId, D2EdgeProps, D2EdgeStyle
+};
 use std::collections::VecDeque;
 
 #[rustfmt::skip]
@@ -319,37 +322,33 @@ impl<N, E> Gss<N, E> {
         }
     }
 
-    pub fn as_d2_diagram(&self, root_idx: StackIdx) -> String
+    #[cfg(feature = "d2-graphs")]
+    pub fn to_d2_graph(&self, root_idx: StackIdx) -> D2Graph
     where
         N: std::fmt::Display,
         E: std::fmt::Display,
     {
-        let mut buf = String::with_capacity(1024);
-        #[allow(unused)] macro_rules! push {
-            ($fmt:expr $(, $args:expr)*) => {{
-                buf.push_str(&format!($fmt $(, $args)*));
-            }}
-        }
-        #[allow(unused)] macro_rules! pushln {
-            ($fmt:expr $(, $args:expr)*) => {{
-                buf.push_str(&format!($fmt $(, $args)*));
-                buf.push_str("\n");
-            }}
-        }
-        pushln!("direction: down");
-        for node_idx in self.arena.bfs(root_idx.0) {
+        let mut graph = D2Graph::default();
+        for node_idx in self.arena.bfs(*root_idx) {
             let node @ Node { idx, data, .. } = &self.arena[node_idx];
-            pushln!("{idx}: \"StackIdx({idx})\\n{data}\"");
-            pushln!("# parent edges:");
+            graph.add_node(D2Node {
+                id: D2NodeId::from(*idx),
+                text: format!("\"StackIdx({idx})\\n{data}\""),
+            });
             for (pidx, pdata) in node.parents() {
-                pushln!("{idx} -> {pidx} {{");
-                pushln!("    label: {pdata}");
-                pushln!("    style.stroke: purple");
-                pushln!("}}");
+                graph.add_edge(D2Edge {
+                    src: D2NodeId::from(*idx),
+                    dst: D2NodeId::from(pidx),
+                    props: D2EdgeProps {
+                        label: Some(format!("{pdata}")),
+                        style: Some(D2EdgeStyle {
+                            stroke: Some("purple".to_string()),
+                        }),
+                    },
+                });
             }
-            buf.push_str("\n");
         }
-        buf
+        graph
     }
 
 }

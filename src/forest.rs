@@ -1,6 +1,7 @@
 //!
 
 use crate::arena::Arena;
+#[cfg(feature = "d2-graphs")] use crate::d2graphs::D2Graph;
 pub use crate::{
     error::{Error, Result},
     node::{Edge, Node, NodeCount, NodeIdx},
@@ -426,15 +427,17 @@ impl<D, P, C> Forest<D, P, C> {
         }
     }
 
+    #[cfg(feature = "d2-graphs")]
     #[inline]
-    pub fn as_d2_diagram(&self, root_idx: NodeIdx) -> String
+    pub fn to_d2_graph(&self, root_idx: NodeIdx) -> D2Graph
     where
         D: std::fmt::Display,
         P: std::fmt::Display,
         C: std::fmt::Display,
     {
-        self.arena.as_d2_diagram(root_idx)
+        self.arena.to_d2_graph(root_idx)
     }
+
 }
 
 impl<D, P, C> std::ops::Index<ForestIdx> for Forest<D, P, C> {
