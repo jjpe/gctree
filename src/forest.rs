@@ -133,17 +133,6 @@ impl<D, P, C> Forest<D, P, C> {
         self.roots.len()
     }
 
-    pub fn pop_n_roots(&mut self, n: usize) -> Vec<ForestIdx> {
-        let nroots = self.count_roots();
-        debug_assert!(nroots >= n, "Cannot remove {n} roots; Found only {nroots}");
-        let mut root_idxs = vec![];
-        let err_msg = format!("Expected >= {n} roots");
-        for _ in 0..n {
-            root_idxs.push(self.roots.pop_back().expect(&err_msg));
-        }
-        root_idxs
-    }
-
     /// If there is a garbage `Node<D>`in `self`, recycle it.
     /// Otherwise, allocate a new one.
     pub fn add_node(&mut self, data: D) -> ForestIdx {
