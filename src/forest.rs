@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::{self, Debug};
 
 
@@ -70,7 +70,7 @@ macro_rules! place_forest {
 #[derive(Clone, Debug, Hash)]
 pub struct Forest<D, P, C> {
     arena: Arena<D, P, C>,
-    roots: VecDeque<ForestIdx>,
+    roots: BTreeSet<ForestIdx>,
 }
 
 impl<D, P, C> Default for Forest<D, P, C> {
@@ -83,7 +83,7 @@ impl<D, P, C> Forest<D, P, C> {
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             arena: Arena::with_capacity(cap),
-            roots: VecDeque::with_capacity(4),
+            roots: BTreeSet::new(),
         }
     }
 
@@ -108,24 +108,19 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     pub fn roots(&self) -> impl DoubleEndedIterator<Item = ForestIdx> + '_ {
-        let (front, back) = self.roots.as_slices();
-        std::iter::empty()
-            .chain(front.iter().copied())
-            .chain(back.iter().copied())
+        self.roots.iter().copied()
     }
 
     #[inline]
     pub fn add_root(&mut self, data: D) -> ForestIdx {
         let root_idx = self.add_node(data);
-        self.roots.push_back(root_idx);
+        self.roots.insert(root_idx);
         root_idx
     }
 
     #[inline]
     pub fn rm_root(&mut self, fidx: ForestIdx) {
-        self.roots = self.roots.drain(..)
-            .filter(|&root| root != fidx)
-            .collect();
+        self.roots.remove(&fidx);
     }
 
     #[inline]
@@ -146,9 +141,7 @@ impl<D, P, C> Forest<D, P, C> {
     /// them are removed as well.
     pub fn rm_node(&mut self, fidx: ForestIdx) -> Result<()> {
         self.arena.rm_node(*fidx)?;
-        if self.roots.contains(&fidx) {
-            self.rm_root(fidx);
-        }
+        self.rm_root(fidx);
         Ok(())
     }
 
@@ -159,9 +152,7 @@ impl<D, P, C> Forest<D, P, C> {
         pdata: P,
         cdata: C,
     ) {
-        if self.roots.contains(&cidx) {
-            self.rm_root(cidx);
-        }
+        self.rm_root(cidx);
         self.arena.add_edge((*pidx, *cidx), pdata, cdata)
     }
 
@@ -171,9 +162,7 @@ impl<D, P, C> Forest<D, P, C> {
         (pidx, pdata, ppos): (ForestIdx, P, Option<usize>),
         (cidx, cdata, cpos): (ForestIdx, C, Option<usize>),
     ) {
-        if self.roots.contains(&cidx) {
-            self.rm_root(cidx);
-        }
+        self.rm_root(cidx);
         self.arena.insert_edge(
             (*pidx, pdata, ppos),
             (*cidx, cdata, cpos)
@@ -189,7 +178,7 @@ impl<D, P, C> Forest<D, P, C> {
     ) -> Result<(P, C)> {
         let result = self.arena.rm_edge(*parent_idx, *child_idx)?;
         if !self[child_idx].has_parents() {
-            self.roots.push_back(child_idx);
+            self.roots.insert(child_idx);
         }
         Ok(result)
     }
