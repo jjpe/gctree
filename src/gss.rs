@@ -5,7 +5,6 @@ use crate::{
     error::Result,
     node::{Edge, Node, NodeIdx}, NodeCount,
 };
-// use itertools::iproduct;
 #[cfg(feature = "d2-graphs")] use crate::d2graphs::{
     D2Edge, D2Graph, D2Node, D2NodeId, D2EdgeProps, D2EdgeStyle
 };
