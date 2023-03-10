@@ -145,6 +145,12 @@ impl<D, P, C> Forest<D, P, C> {
         Ok(())
     }
 
+    pub fn rm_orphan_node(&mut self, fidx: ForestIdx) -> Result<()> {
+        self.rm_root(fidx);
+        self.arena.rm_orphan_node(*fidx)?;
+        Ok(())
+    }
+
     #[inline]
     pub fn add_edge(
         &mut self,

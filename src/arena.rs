@@ -91,6 +91,28 @@ impl<D, P, C> Arena<D, P, C> {
         Ok(())
     }
 
+    /// Traverse the subtree rooted in `self[node_idx]`, but only recycle
+    /// nodes that have become orphaned (i.e. parentless) by the time time
+    /// they're visited.
+    pub fn rm_orphan_node(&mut self, node_idx: NodeIdx) -> Result<()> {
+        if node_idx.0 >= self.nodes.len() {
+            return Err(Error::NodeNotFound(node_idx));
+        }
+        for idx in self.dfs(node_idx)
+            .filter(|&node_idx| !self[node_idx].has_parents())
+            .collect::<Vec<_>>()
+        {
+            self.rm_edges([idx], self[idx].child_idxs().collect::<Vec<_>>())?;
+            // NOTE: Don't clear the  data field of `self[node_idx]`, for perf
+            //       reasons.  We can get away with this because of the
+            //       non-optionality of the `data` param of `Self::new_node()`
+            //       i.e. the node's data field is statically guaranteed to be
+            //       in a valid state by the time the node is usable again.
+            self.garbage.push_back(idx);
+        }
+        Ok(())
+    }
+
     pub fn parent_edge(
         &self,
         src: NodeIdx,
