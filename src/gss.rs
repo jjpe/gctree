@@ -165,6 +165,11 @@ impl<N, E> Gss<N, E> {
     }
 
     #[inline]
+    pub fn clear(&mut self) -> Result<()> {
+        self.arena.clear()
+    }
+
+    #[inline]
     pub fn tops(&self) -> impl DoubleEndedIterator<Item = StackIdx> + '_ {
         self.tops.iter().copied()
     }

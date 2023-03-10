@@ -33,6 +33,18 @@ impl<D, P, C> Arena<D, P, C> {
         }
     }
 
+    pub fn clear(&mut self) -> Result<()> {
+        let non_garbage_nodes: Vec<NodeIdx> = self.nodes.iter()
+            .filter(|node| !self.garbage.contains(&node.idx))
+            .map(|node| node.idx)
+            .collect();
+        for idx in non_garbage_nodes {
+            self.rm_node(idx)?;
+        }
+        debug_assert!(self.nodes.iter().all(|n| self.garbage.contains(&n.idx)));
+        Ok(())
+    }
+
     /// Get the logical size, which is defined as `physical size - garbage size`
     /// i.e. the number of allocated, non-garbage nodes in `self`.
     #[inline]
