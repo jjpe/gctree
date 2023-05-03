@@ -110,10 +110,8 @@ impl<D, P, C> Arena<D, P, C> {
         if node_idx.0 >= self.nodes.len() {
             return Err(Error::NodeNotFound(node_idx));
         }
-        for idx in self.dfs(node_idx)
-            .filter(|&node_idx| !self[node_idx].has_parents())
-            .collect::<Vec<_>>()
-        {
+        for idx in self.dfs(node_idx) {
+            if self[idx].has_parents() { continue }
             self.rm_edges([idx], self[idx].child_idxs().collect::<Vec<_>>())?;
             // NOTE: Don't clear the  data field of `self[node_idx]`, for perf
             //       reasons.  We can get away with this because of the
