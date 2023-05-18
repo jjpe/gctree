@@ -280,7 +280,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self { src, dst, data } = &self;
-        write!(f, "{src}->{dst}, {data}")?;
+        write!(f, "{src}--[{data}]-->{dst}")?;
         Ok(())
     }
 }
