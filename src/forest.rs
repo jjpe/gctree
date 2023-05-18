@@ -11,7 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::fmt::{self, Debug};
 
 
@@ -28,7 +28,7 @@ macro_rules! forest {
     ) => {{ #[allow(redundant_semicolons, unused)] {
         let mut forest = $crate::Forest::default();
         $(
-            let root_idx = forest.add_root($data);
+            let root_idx = forest.push_root($data);
             $(
                 $(
                     place_forest! { [in forest] root_idx; $children }
@@ -71,7 +71,7 @@ macro_rules! place_forest {
 #[derive(Clone, Debug, Hash)]
 pub struct Forest<D, P, C> {
     arena: Arena<D, P, C>,
-    roots: BTreeSet<ForestIdx>,
+    roots: Vec<ForestIdx>,
 }
 
 impl<D, P, C> Default for Forest<D, P, C> {
@@ -84,7 +84,7 @@ impl<D, P, C> Forest<D, P, C> {
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             arena: Arena::with_capacity(cap),
-            roots: BTreeSet::new(),
+            roots: vec![],
         }
     }
 
@@ -113,15 +113,30 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     #[inline]
-    pub fn add_root(&mut self, data: D) -> ForestIdx {
+    pub fn push_root(&mut self, data: D) -> ForestIdx {
         let root_idx = self.add_node(data);
-        self.roots.insert(root_idx);
+        self.roots.push(root_idx);
+        root_idx
+    }
+
+    #[inline]
+    pub fn insert_root(&mut self, pos: usize, data: D) -> ForestIdx {
+        let root_idx = self.add_node(data);
+        self.roots.insert(pos, root_idx);
         root_idx
     }
 
     #[inline]
     pub fn rm_root(&mut self, fidx: ForestIdx) {
-        self.roots.remove(&fidx);
+        if !self.roots.contains(&fidx) { return }
+        self.roots = self.roots.drain(..)
+            .filter(|&idx| idx != fidx)
+            .collect();
+    }
+
+    #[inline]
+    pub fn clear_roots(&mut self) {
+        self.roots.clear();
     }
 
     #[inline]
@@ -892,7 +907,7 @@ mod tests {
     #[rustfmt::skip]
     fn make_data() -> Result<Data> {
         let mut forest: Forest<&str, (), ()> = Forest::default();
-        let root0: ForestIdx = forest.add_root(""); // NOTE: <--
+        let root0: ForestIdx = forest.push_root(""); // NOTE: <--
         let node0: ForestIdx = forest.add_node("");
         let node00: ForestIdx = forest.add_node("");
         let node01: ForestIdx = forest.add_node("");
@@ -911,7 +926,7 @@ mod tests {
         forest.add_edge((node2,  node20),  (), ());
         forest.add_edge((node20, node200), (), ());
         forest.add_edge((node2,  node21),  (), ());
-        let root1: ForestIdx = forest.add_root(""); // NOTE: <--
+        let root1: ForestIdx = forest.push_root(""); // NOTE: <--
         let node3: ForestIdx = forest.add_node("");
         let node30: ForestIdx = forest.add_node("");
         let node31: ForestIdx = forest.add_node("");
