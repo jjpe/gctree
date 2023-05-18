@@ -5,9 +5,6 @@ use crate::{
     error::Result,
     node::{Edge, Node, NodeIdx}, NodeCount,
 };
-#[cfg(feature = "d2-graphs")] use crate::d2graphs::{
-    D2Edge, D2Graph, D2Node, D2NodeId, D2EdgeProps, D2EdgeStyle
-};
 use std::collections::VecDeque;
 
 #[rustfmt::skip]
@@ -333,37 +330,6 @@ impl<N, E> Gss<N, E> {
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
         self.arena.bfs(start_idx)
     }
-
-
-    #[cfg(feature = "d2-graphs")]
-    pub fn to_d2_graph(&self, root_idx: StackIdx) -> D2Graph
-    where
-        N: std::fmt::Display,
-        E: std::fmt::Display,
-    {
-        let mut graph = D2Graph::default();
-        for node_idx in self.arena.bfs(*root_idx) {
-            let node @ Node { idx, data, .. } = &self.arena[node_idx];
-            graph.add_node(D2Node {
-                id: D2NodeId::from(*idx),
-                text: format!("\"StackIdx({idx})\\n{data}\""),
-            });
-            for (pidx, pdata) in node.parents() {
-                graph.add_edge(D2Edge {
-                    src: D2NodeId::from(*idx),
-                    dst: D2NodeId::from(pidx),
-                    props: D2EdgeProps {
-                        label: Some(format!("{pdata}")),
-                        style: Some(D2EdgeStyle {
-                            stroke: Some("purple".to_string()),
-                        }),
-                    },
-                });
-            }
-        }
-        graph
-    }
-
 }
 
 #[cfg(feature = "graphviz")]

@@ -3,7 +3,6 @@
 #![forbid(unsafe_code)]
 
 mod arena;
-#[cfg(feature = "d2-graphs")] pub mod d2graphs;
 #[cfg(feature = "graphviz")] pub mod graphviz;
 mod node;
 pub mod error;

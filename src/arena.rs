@@ -4,9 +4,6 @@ use crate::{
     error::{Error, Result},
     node::{Edge, Node, NodeCount, NodeIdx},
 };
-#[cfg(feature = "d2-graphs")] use crate::d2graphs::{
-    D2Graph, D2Node, D2NodeId, D2Edge, D2EdgeProps, D2EdgeStyle
-};
 #[cfg(feature = "graphviz")] use crate::graphviz::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
@@ -355,49 +352,6 @@ impl<D, P, C> Arena<D, P, C> {
         }
         graph
     }
-
-    #[cfg(feature = "d2-graphs")]
-    pub fn to_d2_graph(&self, root_idx: NodeIdx) -> D2Graph
-    where
-        D: std::fmt::Display,
-        P: std::fmt::Display,
-        C: std::fmt::Display,
-    {
-        let mut graph = D2Graph::default();
-        for node_idx in self.bfs(root_idx) {
-            let node @ Node { idx, data, .. } = &self[node_idx];
-            graph.add_node(D2Node {
-                id: D2NodeId::from(*idx),
-                text: format!("{data}"),
-            });
-            for (pidx, pdata) in node.parents() {
-                graph.add_edge(D2Edge {
-                    src: D2NodeId::from(*idx),
-                    dst: D2NodeId::from(pidx),
-                    props: D2EdgeProps {
-                        label: Some(format!("{pdata}")),
-                        style: Some(D2EdgeStyle {
-                            stroke: Some("purple".to_string())
-                        }),
-                    },
-                });
-            }
-            for (cidx, cdata) in node.children() {
-                graph.add_edge(D2Edge {
-                    src: D2NodeId::from(*idx),
-                    dst: D2NodeId::from(cidx),
-                    props: D2EdgeProps {
-                        label: Some(format!("{cdata}")),
-                        style: Some(D2EdgeStyle {
-                            stroke: Some("\"#36454F\"".to_string()) // charcoal
-                        }),
-                    },
-                });
-            }
-        }
-        graph
-    }
-
 }
 
 impl<D, P, C> std::ops::Index<NodeIdx> for Arena<D, P, C> {
