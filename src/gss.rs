@@ -326,6 +326,15 @@ impl<N, E> Gss<N, E> {
         }
     }
 
+    #[inline]
+    pub fn bfs(
+        &self,
+        start_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
+        self.arena.bfs(start_idx)
+    }
+
+
     #[cfg(feature = "d2-graphs")]
     pub fn to_d2_graph(&self, root_idx: StackIdx) -> D2Graph
     where
