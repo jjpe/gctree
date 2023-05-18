@@ -357,6 +357,9 @@ impl<N, E> Gss<N, E> {
 
 }
 
+#[cfg(feature = "graphviz")]
+pub type Layer = Vec<StackIdx>;
+
 impl<N, E> std::ops::Index<StackIdx> for Gss<N, E> {
     type Output = Node<N, E, ()>;
 

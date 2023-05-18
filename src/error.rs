@@ -20,6 +20,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     /// I/O error: {0}
     Io(ioe::IoError),
+    /// GraphViz generation error: {0}
+    GraphvizParse(String),
 
     /// An error originating in a Gss instance: {0:?}
     GssError(#[from] crate::gss::Error),

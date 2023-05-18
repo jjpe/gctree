@@ -2,6 +2,7 @@
 
 use crate::arena::Arena;
 #[cfg(feature = "d2-graphs")] use crate::d2graphs::D2Graph;
+#[cfg(feature = "graphviz")] use crate::graphviz::*;
 pub use crate::{
     error::{Error, Result},
     node::{Edge, Node, NodeCount, NodeIdx},
@@ -409,6 +410,53 @@ impl<D, P, C> Forest<D, P, C> {
         } else {
             Err(Error::ExpectedRootNode(*fidx))
         }
+    }
+
+
+    #[cfg(feature = "graphviz")]
+    pub fn to_graphviz_graph(&self, root_idx: ForestIdx) -> DotGraph
+    where
+        D: std::fmt::Display,
+        P: std::fmt::Display,
+        C: std::fmt::Display,
+    {
+        let mut graph = DotGraph {
+            rankdir: Some(DotRankDir::TopToBottom),
+            ..DotGraph::default()
+        };
+        for node_idx in self.bfs(root_idx) {
+            let node @ Node { idx, data, .. } = &self[node_idx];
+            graph.add(DotNode {
+                idx: *idx,
+                attrs: DotAttrs {
+                    label: Some(format!("{data}")),
+                    ..DotAttrs::default()
+                },
+            });
+            for (pidx, pdata) in node.parents() {
+                graph.add(DotEdge {
+                    src: *idx,
+                    dst: pidx,
+                    attrs: DotAttrs {
+                        label: Some(format!("{pdata}")),
+                        color: Some("purple".to_string()),
+                        ..DotAttrs::default()
+                    },
+                });
+            }
+            for (cidx, cdata) in node.children() {
+                graph.add(DotEdge {
+                    src: *idx,
+                    dst: cidx,
+                    attrs: DotAttrs {
+                        label: Some(format!("{cdata}")),
+                        color: Some("#36454F".to_string()), // charcoal
+                        ..DotAttrs::default()
+                    },
+                });
+            }
+        }
+        graph
     }
 
     #[cfg(feature = "d2-graphs")]
