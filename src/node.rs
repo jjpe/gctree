@@ -37,12 +37,12 @@ impl<D, P, C> Node<D, P, C> {
 
     #[inline(always)]
     pub fn parents(&self) -> impl DoubleEndedIterator<Item = (NodeIdx, &P)> + '_ {
-        self.parents.iter().map(|(idx, data)| (*idx, data))
+        self.parents.iter().map(|(pidx, pdata)| (*pidx, pdata))
     }
 
     #[inline(always)]
     pub fn parent_idxs(&self) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.parents.iter().map(|(idx, _)| *idx)
+        self.parents.iter().map(|(pidx, _)| *pidx)
     }
 
     #[inline(always)]
