@@ -198,11 +198,7 @@ impl<D, P, C> Forest<D, P, C> {
         parent_idx: ForestIdx,
         child_idx: ForestIdx
     ) -> Result<(P, C)> {
-        let result = self.arena.rm_edge(*parent_idx, *child_idx)?;
-        if !self[child_idx].has_parents() {
-            self.roots.insert(child_idx);
-        }
-        Ok(result)
+        self.arena.rm_edge(*parent_idx, *child_idx)
     }
 
     #[must_use]
