@@ -48,3 +48,42 @@ impl From<std::io::Error> for Error {
         Self::Io(ioe::IoError::from(err))
     }
 }
+
+impl deltoid::Core for Error {
+    type Delta = ErrorDelta;
+}
+
+impl deltoid::Apply for Error {
+    fn apply(&self, _delta: Self::Delta) -> deltoid::DeltaResult<Self> {
+        unimplemented!("impl deltoid::Apply for Error") // TODO
+    }
+}
+
+impl deltoid::Delta for Error {
+    fn delta(&self, _rhs: &Self) -> deltoid::DeltaResult<Self::Delta> {
+        unimplemented!("impl deltoid::Delta for Error") // TODO
+    }
+}
+
+impl deltoid::FromDelta for Error {
+    fn from_delta(_delta: Self::Delta) -> deltoid::DeltaResult<Self> {
+        unimplemented!("impl deltoid::FromDelta for Error") // TODO
+    }
+}
+
+impl deltoid::IntoDelta for Error {
+    fn into_delta(self) -> deltoid::DeltaResult<Self::Delta> {
+        unimplemented!("impl deltoid::INtoDelta for Error") // TODO
+    }
+}
+
+#[derive(Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+pub struct ErrorDelta {
+    // TODO
+}
+
+impl std::fmt::Debug for ErrorDelta {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unimplemented!() // TODO
+    }
+}

@@ -770,6 +770,66 @@ where
 }
 
 
+impl<D, P, C> deltoid::Core for Forest<D, P, C> {
+    type Delta = ErrorDelta;
+}
+
+impl<D, P, C> deltoid::Apply for Forest<D, P, C>
+where
+    D: Clone + Debug + PartialEq,
+    P: Clone + Debug,
+    C: Clone + Debug,
+{
+    fn apply(&self, _delta: Self::Delta) -> deltoid::DeltaResult<Self> {
+        unimplemented!("impl deltoid::Apply for Forest<D, P, C>") // TODO
+    }
+}
+
+impl<D, P, C> deltoid::Delta for Forest<D, P, C>
+where
+    D: Clone + Debug + PartialEq,
+    P: Clone + Debug,
+    C: Clone + Debug,
+{
+    fn delta(&self, _rhs: &Self) -> deltoid::DeltaResult<Self::Delta> {
+        unimplemented!("impl deltoid::Delta for Forest<D, P, C>") // TODO
+    }
+}
+
+impl<D, P, C> deltoid::FromDelta for Forest<D, P, C>
+where
+    D: Clone + Debug + PartialEq,
+    P: Clone + Debug,
+    C: Clone + Debug,
+{
+    fn from_delta(_delta: Self::Delta) -> deltoid::DeltaResult<Self> {
+        unimplemented!("impl deltoid::FromDelta for Forest<D, P, C>") // TODO
+    }
+}
+
+impl<D, P, C> deltoid::IntoDelta for Forest<D, P, C>
+where
+    D: Clone + Debug + PartialEq,
+    P: Clone + Debug,
+    C: Clone + Debug,
+{
+    fn into_delta(self) -> deltoid::DeltaResult<Self::Delta> {
+        unimplemented!("impl deltoid::INtoDelta for Forest<D, P, C>") // TODO
+    }
+}
+
+#[derive(Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+pub struct ErrorDelta {
+    // TODO
+}
+
+impl std::fmt::Debug for ErrorDelta {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unimplemented!() // TODO
+    }
+}
+
+
 
 #[derive(
     Clone,
