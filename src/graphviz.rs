@@ -47,7 +47,6 @@ impl DotGraph {
     /// Write `self` to `{dirpath}/{stem}.svg`.
     pub fn write_to_svg(&self, dirpath: &Path, stem: &str) -> Result<()> {
         let dot = &format!("{self}");
-        println!("dot:\n{}", dot.replace("\nstate", "\\nstate")); // HACK
         let g: Graph = parse(dot).map_err(Error::GraphvizParse)?;
         let mut pctx = PrinterContext::default();
         let svg: String = exec(g, &mut pctx, vec![Format::Svg.into()])?;
