@@ -13,7 +13,7 @@ use graphviz_rust::{
 use std::path::Path;
 
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DotGraph {
     /// The background color
     pub bgcolor: Option<String>,
@@ -75,7 +75,7 @@ impl std::fmt::Display for DotGraph {
 
 
 
-#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DotSubGraph {
     pub is_cluster: bool,
     /// If `self.is_cluster` is `true`, then a background color can be provided
@@ -108,6 +108,7 @@ impl std::fmt::Display for DotSubGraph {
 
 #[rustfmt::skip]
 #[derive(
+    Debug,
     Clone,
     PartialEq,
     Eq,
@@ -144,14 +145,34 @@ impl std::fmt::Display for DotStmt {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, displaydoc::Display)]
+#[rustfmt::skip]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    displaydoc::Display
+)]
 /// {idx} [{attrs}]
 pub struct DotNode {
     pub idx: NodeIdx,
     pub attrs: DotAttrs,
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, displaydoc::Display)]
+#[rustfmt::skip]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    displaydoc::Display
+)]
 /// {src} -> {dst} [{attrs}]
 pub struct DotEdge {
     pub src: NodeIdx,
@@ -160,17 +181,17 @@ pub struct DotEdge {
 }
 
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DotOverlap {
     Scale
 }
 
 #[rustfmt::skip]
 #[derive(
+    Debug,
     Default,
     Clone,
     Copy,
-    Debug,
     PartialEq,
     Eq,
     PartialOrd,
@@ -192,6 +213,7 @@ pub enum DotRankDir {
 
 #[rustfmt::skip]
 #[derive(
+    Debug,
     Clone,
     PartialEq,
     Eq,
@@ -209,7 +231,7 @@ pub enum DotRankStmt {
     Same,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DotAttrs {
     /// A label that will be displayed within a pair of double quotes.
     pub label: Option<String>,
@@ -296,6 +318,7 @@ impl std::fmt::Display for DotAttrs {
 
 #[rustfmt::skip]
 #[derive(
+    Debug,
     Default,
     Clone,
     PartialEq,
