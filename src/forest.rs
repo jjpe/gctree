@@ -125,6 +125,21 @@ impl<D, P, C> Forest<D, P, C> {
         root_idx
     }
 
+    #[inline(always)]
+    pub fn set_roots(&mut self, roots: Vec<ForestIdx>) {
+        self.roots = roots;
+    }
+
+    pub fn root(&mut self, fidx: ForestIdx) {
+        self.roots.push(fidx);
+    }
+
+    pub fn unroot(&mut self, fidx: ForestIdx) {
+        if let Some(pos) = self.roots.iter().position(|&r| r == fidx) {
+            self.roots.remove(pos);
+        }
+    }
+
     #[inline]
     pub fn clear_roots(&mut self) {
         self.roots.clear();
