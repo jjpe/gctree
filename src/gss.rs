@@ -415,20 +415,3 @@ pub enum Error {
     /// Node {0} is not a top-of-stack
     ExpectedTop(NodeIdx)
 }
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn make_gss() -> Result<()> {
-
-        // let mut gss: Gss<&str, &str> = Gss::default();
-        // gss.add_edge
-
-
-        Ok(())
-    }
-
-}
