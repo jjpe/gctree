@@ -10,6 +10,7 @@ pub mod forest;
 pub mod gss;
 
 pub use crate::{
+    error::{Error, Result},
     gss::{Gss, StackIdx},
     node::{Edge, Node, NodeCount, NodeIdx},
     forest::{Forest, ForestIdx},
