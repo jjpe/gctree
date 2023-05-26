@@ -365,6 +365,10 @@ impl<N, E> std::ops::IndexMut<StackIdx> for Gss<N, E> {
 )]
 pub struct StackIdx(NodeIdx);
 
+impl StackIdx {
+    pub const ROOT: Self = Self(NodeIdx(0));
+}
+
 impl std::fmt::Debug for StackIdx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "StackIdx({})", self.0)
