@@ -126,14 +126,6 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     #[inline]
-    pub fn rm_root(&mut self, fidx: ForestIdx) {
-        if !self.roots.contains(&fidx) { return }
-        self.roots = self.roots.drain(..)
-            .filter(|&idx| idx != fidx)
-            .collect();
-    }
-
-    #[inline]
     pub fn clear_roots(&mut self) {
         self.roots.clear();
     }
@@ -156,13 +148,6 @@ impl<D, P, C> Forest<D, P, C> {
     /// them are removed as well.
     pub fn rm_node(&mut self, fidx: ForestIdx) -> Result<()> {
         self.arena.rm_node(*fidx)?;
-        self.rm_root(fidx);
-        Ok(())
-    }
-
-    pub fn rm_orphan_node(&mut self, fidx: ForestIdx) -> Result<()> {
-        self.rm_root(fidx);
-        self.arena.rm_orphan_node(*fidx)?;
         Ok(())
     }
 
@@ -173,7 +158,6 @@ impl<D, P, C> Forest<D, P, C> {
         pdata: P,
         cdata: C,
     ) {
-        self.rm_root(cidx);
         self.arena.add_edge((*pidx, *cidx), pdata, cdata)
     }
 
@@ -183,7 +167,6 @@ impl<D, P, C> Forest<D, P, C> {
         (pidx, pdata, ppos): (ForestIdx, P, Option<usize>),
         (cidx, cdata, cpos): (ForestIdx, C, Option<usize>),
     ) {
-        self.rm_root(cidx);
         self.arena.insert_edge(
             (*pidx, pdata, ppos),
             (*cidx, cdata, cpos)
