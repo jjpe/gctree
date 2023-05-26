@@ -646,8 +646,6 @@ where
 impl<D, P, C> fmt::Display for Forest<D, P, C>
 where
     D: std::fmt::Display,
-    // P: std::fmt::Display,
-    // C: std::fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // NOTE: This loop is `O(T * D * N)`, where:
