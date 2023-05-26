@@ -106,6 +106,7 @@ impl<D, P, C> Arena<D, P, C> {
         Ok(())
     }
 
+    #[allow(unused)]
     /// Traverse the subtree rooted in `self[node_idx]`, but only recycle
     /// nodes that have become orphaned (i.e. parentless) by the time time
     /// they're visited.
