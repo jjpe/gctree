@@ -77,6 +77,11 @@ impl<D, P, C> Arena<D, P, C> {
         }
     }
 
+    #[inline]
+    pub(crate) fn add_garbage(&mut self, nidx: NodeIdx) {
+        self.garbage.push_back(nidx);
+    }
+
     #[must_use]
     /// Recycle `self[node_idx]`.  Since a node conceptually owns
     /// its children, all descendant nodes and all edges between
