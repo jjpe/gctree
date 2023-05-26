@@ -276,14 +276,28 @@ impl<D, P, C> Forest<D, P, C> {
                 (*subroot_idx, C::default(), child_pos),
             );
         }
-        self.rm_subtree(target_idx)?;
+        self.arena.rm_node(*target_idx)?;
         Ok(())
     }
 
-    #[inline]
-    #[must_use]
+    #[inline(always)]
     pub fn rm_subtree(&mut self, fidx: ForestIdx) -> Result<()> {
-        self.rm_node(fidx)
+        if **fidx >= *self.physical_size() {
+            return Err(Error::NodeNotFound(*fidx))?;
+        }
+        for nidx in self.dfs(fidx).collect::<Vec<_>>() {
+            if self[nidx].has_parents() { continue }
+            self.unroot(nidx);
+            self.arena.add_garbage(*nidx);
+            let child_idxs = self[nidx].child_idxs()
+                .map(ForestIdx::from)
+                .collect::<Vec<_>>();
+            for &cidx in &child_idxs {
+                self.rm_edge(nidx, cidx)?;
+                self.root(cidx);
+            }
+        }
+        Ok(())
     }
 
     #[must_use]
@@ -293,7 +307,7 @@ impl<D, P, C> Forest<D, P, C> {
         let children: Vec<_> = self[fidx].child_idxs().collect();
         for child_idx in children.into_iter().map(ForestIdx) {
             self.rm_edge(fidx, child_idx)?;
-            self.rm_subtree(child_idx)?;
+            self.arena.rm_node(*child_idx)?;
         }
         Ok(())
     }
