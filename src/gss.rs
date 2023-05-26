@@ -323,12 +323,12 @@ impl<N, E> Gss<N, E> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn bfs(
         &self,
-        start_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        self.arena.bfs(start_idx)
+        start_idx: StackIdx,
+    ) -> impl DoubleEndedIterator<Item = StackIdx> {
+        self.arena.bfs(*start_idx).map(StackIdx)
     }
 }
 
