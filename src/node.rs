@@ -211,6 +211,7 @@ impl<D, P, C> Node<D, P, C> {
     Hash,
     serde_derive::Deserialize,
     serde_derive::Serialize,
+    derive_more::Deref,
     derive_more::From
 )]
 pub struct NodeIdx(pub(crate) usize);
