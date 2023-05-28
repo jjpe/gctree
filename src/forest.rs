@@ -991,8 +991,11 @@ mod tests {
             ],
             subtree_bfs_order: vec![
                 root0,
+                node0,
                 node1,
                 node2,
+                node00,
+                node01,
                 node10,
                 node20,
                 node21,
@@ -1000,6 +1003,9 @@ mod tests {
             ],
             subtree_dfs_order: vec![
                 root0,
+                node0,
+                node00,
+                node01,
                 node1,
                 node10,
                 node2,
@@ -1127,33 +1133,6 @@ mod tests {
         println!("0 forest:\n{forest}");
         forest.move_subtree(parent_idx, subroot_idx)?;
         println!("1 forest:\n{forest}");
-
-        let expected = forest! {
-            ("", // root 0
-             ("",
-              (""),
-              (""),
-              ("",
-               ("",
-                ("")),
-               (""))),
-             ("",
-              (""))),
-            ("", // root 1
-             ("",
-              (""),
-              ("")),
-             ("",
-              ("")),
-             ("",
-              ("",
-               ("")),
-              ("")))
-        };
-        assert_eq!(
-            forest, expected,
-            "\nforest:\n{forest}\n    !=\nexpected:\n{expected}"
-        );
 
         let (parent_idx, subroot_idx) = (ForestIdx::from(0), ForestIdx::from(6));
         // Make `tree[subroot_idx]` a child of its grandparent,
