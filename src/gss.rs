@@ -283,17 +283,13 @@ impl<N, E> Gss<N, E> {
         ndata: N,
     ) -> Result<StackIdx> {
         let nidx = StackIdx(self.arena.add_node(ndata));
-        self.tops = if let Some((pidx, pdata)) = parent {
+        if let Some((pidx, pdata)) = parent {
             self.arena.add_edge((*pidx, *nidx), pdata, ());
-            self.tops.drain(..)
-                .filter(|&top| top != pidx) // remove parent if present
-                .chain([nidx])              // append node
-                .collect()
-        } else {
-            self.tops.drain(..)
-                .chain([nidx]) // append nidx
-                .collect()
+            while let Some(pos) = self.tops.iter().position(|&top| top == pidx) {
+                self.tops.remove(pos);
+            }
         };
+        self.tops.push(nidx);
         Ok(nidx)
     }
 
