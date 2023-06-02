@@ -295,13 +295,22 @@ impl<D, P, C> Forest<D, P, C> {
         Ok(())
     }
 
+    /// Remove a sub-tree rooted in `self[fidx]` from `self`.
+    /// If `force`, the removal happens regardless of whether or not
+    /// `self[fidx]` has any parents.
+    /// If `!force`, the removal will only happen if `self[fidx]` is
+    /// an orphan node, i.e. it respects the ownersip of the parent(s).
     #[inline(always)]
-    pub fn rm_subtree(&mut self, fidx: ForestIdx) -> Result<()> {
+    pub fn rm_subtree(
+        &mut self,
+        fidx: ForestIdx,
+        force: bool,
+    ) -> Result<()> {
         if **fidx >= *self.physical_size() {
             return Err(Error::NodeNotFound(*fidx))?;
         }
         for nidx in self.dfs(fidx).collect::<Vec<_>>() {
-            if self[nidx].has_parents() { continue }
+            if !force && self[nidx].has_parents() { continue }
             self.unroot(nidx);
             self.arena.add_garbage(*nidx);
             let child_idxs = self[nidx].child_idxs()
@@ -1089,7 +1098,7 @@ mod tests {
     fn remove_subtree() -> Result<()> {
         let mut data = make_data()?;
         let node0 = ForestIdx::from(1);
-        data.forest.rm_subtree(node0)?;
+        data.forest.rm_subtree(node0, false)?;
         let subtree_bfs_order: Vec<_> = data.forest.bfs(data.roots[0]).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
         let subtree_dfs_order: Vec<_> = data.forest.dfs(data.roots[0]).collect();
@@ -1105,11 +1114,11 @@ mod tests {
         println!("initial:\n{}\n{:#?}", data.forest, data.forest);
         // assert!(data.forest.garbage.is_empty());
 
-        data.forest.rm_subtree(node0)?;
+        data.forest.rm_subtree(node0, false)?;
         println!("after removal 1:\n{}\n{:#?}", data.forest, data.forest);
         // assert_eq!(data.forest.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
 
-        data.forest.rm_subtree(node0)?;
+        data.forest.rm_subtree(node0, false)?;
         println!("after removal 2:\n{}\n{:#?}", data.forest, data.forest);
         // assert_eq!(data.forest.garbage, [NodeIdx(3), NodeIdx(2), NodeIdx(1)]);
 
