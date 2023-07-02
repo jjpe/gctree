@@ -39,6 +39,14 @@ impl<D, P, C> Arena<D, P, C> {
         for idx in non_garbage_nodes {
             self.rm_node(idx)?;
         }
+        use itertools::Itertools;
+        // HACK: The real fix would be to use something like a
+        //       `self.garbage` of type `BTreeSet<NodeIdx>`,
+        //        coupled with accounting fixes.
+        self.garbage = self.garbage.drain(..)
+            .sorted()
+            .unique()
+            .collect();
         debug_assert!(self.nodes.iter().all(|n| self.garbage.contains(&n.idx)));
         Ok(())
     }

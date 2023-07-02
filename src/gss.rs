@@ -163,7 +163,9 @@ impl<N, E> Gss<N, E> {
 
     #[inline]
     pub fn clear(&mut self) -> Result<()> {
-        self.arena.clear()
+        self.arena.clear()?;
+        self.tops.clear();
+        Ok(())
     }
 
     #[inline]
