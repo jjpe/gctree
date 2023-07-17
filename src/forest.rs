@@ -311,11 +311,17 @@ impl<D, P, C> Forest<D, P, C> {
         }
         for nidx in self.dfs(fidx).collect::<Vec<_>>() {
             if !force && self[nidx].has_parents() { continue }
+            let parent_idxs = self[nidx].parent_idxs()
+                .map(ForestIdx::from)
+                .collect::<Vec<_>>(/*avoid borrowck*/);
+            for &pidx in &parent_idxs {
+                self.rm_edge(pidx, nidx)?;
+            }
             self.unroot(nidx);
             self.arena.add_garbage(*nidx);
             let child_idxs = self[nidx].child_idxs()
                 .map(ForestIdx::from)
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>(/*avoid borrowck*/);
             for &cidx in &child_idxs {
                 self.rm_edge(nidx, cidx)?;
                 self.root(cidx);
