@@ -111,6 +111,10 @@ impl<D, P, C> Forest<D, P, C> {
         self.roots.iter().copied()
     }
 
+    pub fn add_garbage(&mut self, fidx: ForestIdx) {
+        self.arena.add_garbage(fidx.0);
+    }
+
     #[inline]
     pub fn push_root(&mut self, data: D) -> ForestIdx {
         let root_idx = self.add_node(data);
