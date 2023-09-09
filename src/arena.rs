@@ -303,6 +303,65 @@ impl<D, P, C> Arena<D, P, C> {
         output.into_iter()
     }
 
+    pub fn dfs_pre(
+        &self,
+        start_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
+        self.dfs_base(start_idx)
+            .filter(|&(ttype, _)| ttype == TraversalType::Pre)
+            .map(|(_, nidx)| nidx)
+    }
+
+    pub fn dfs_post(
+        &self,
+        start_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
+        self.dfs_base(start_idx)
+            .filter(|&(ttype, _)| ttype == TraversalType::Post)
+            .map(|(_, nidx)| nidx)
+    }
+
+    pub fn dfs_base(
+        &self,
+        start_idx: NodeIdx,
+    ) -> impl DoubleEndedIterator<Item = (TraversalType, NodeIdx)> {
+        struct Entry {
+            nidx: NodeIdx,
+            /// The number of children of `nidx` visited so far
+            visited: usize,
+        }
+        let mut stack = Vec::with_capacity(1024);
+        stack.push(Entry {
+            nidx: start_idx,
+            visited: 0,
+        });
+        let mut output = vec![];
+        while let Some(current) = stack.last_mut() {
+            let current_child = current.visited;
+            let node = &self[current.nidx];
+            let num_children = node.count_children();
+            let is_pre = current_child == 0;
+            let is_post = current_child == num_children;
+            if is_pre {
+                output.push((TraversalType::Pre,  current.nidx));
+            }
+            if is_post {
+                output.push((TraversalType::Post, current.nidx));
+                stack.pop().unwrap();
+                continue
+            }
+            if !is_pre && !is_post {
+                output.push((TraversalType::Interspersed,  current.nidx));
+            }
+            current.visited += 1;
+            stack.push(Entry {
+                nidx: node.children[current_child].0,
+                visited: 0,
+            });
+        }
+        output.into_iter()
+    }
+
     pub fn bfs(
         &self,
         start_idx: NodeIdx,
@@ -496,15 +555,13 @@ where
 }
 
 
-
-
-
-// #[cfg(test)]
-// mod tests {
-//     // use super::*;
-
-//     #[test]
-//     fn foo_test() {
-//         todo!();
-//     }
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(displaydoc::Display)]
+pub enum TraversalType {
+    /// pre
+    Pre,
+    /// interspersed
+    Interspersed,
+    /// post
+    Post,
+}

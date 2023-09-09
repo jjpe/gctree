@@ -1,6 +1,6 @@
 //!
 
-use crate::arena::Arena;
+use crate::arena::{Arena, TraversalType};
 #[cfg(feature = "graphviz")] use crate::graphviz::*;
 pub use crate::{
     error::{Error, Result},
@@ -224,7 +224,7 @@ impl<D, P, C> Forest<D, P, C> {
         let mut map = HashMap::<SrcTreeIdx, DstTreeIdx>::new();
         map.insert(None, dst_node_idx);
         let (src, dst) = (src, self);
-        for src_node_idx in src.dfs(root_idx) {
+        for src_node_idx in src.dfs_pre(root_idx) {
             let src_parent_idx = src.parent_of(src_node_idx);
             let dst_parent_idx = map[&src_parent_idx];
             let dst_node_idx = dst.add_node(src[src_node_idx].data.clone());
@@ -313,7 +313,7 @@ impl<D, P, C> Forest<D, P, C> {
         if **fidx >= *self.physical_size() {
             return Err(Error::NodeNotFound(*fidx))?;
         }
-        for nidx in self.dfs(fidx).collect::<Vec<_>>() {
+        for nidx in self.dfs_pre(fidx).collect::<Vec<_>>() {
             if !force && self[nidx].has_parents() { continue }
             let parent_idxs = self[nidx].parent_idxs()
                 .map(ForestIdx::from)
@@ -408,11 +408,29 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     #[inline(always)]
-    pub fn dfs(
+    pub fn dfs_pre(
         &self,
         fidx: ForestIdx,
     ) -> impl DoubleEndedIterator<Item = ForestIdx> {
-        self.arena.dfs(*fidx).map(ForestIdx)
+        self.arena.dfs_pre(*fidx).map(ForestIdx)
+    }
+
+    #[inline(always)]
+    pub fn dfs_post(
+        &self,
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = ForestIdx> {
+        self.arena.dfs_post(*fidx).map(ForestIdx)
+    }
+
+    #[allow(unused)] // Intentionally not publicly exposed, for now
+    #[inline(always)]
+    pub(crate) fn dfs_base(
+        &self,
+        fidx: ForestIdx,
+    ) -> impl DoubleEndedIterator<Item = (TraversalType, ForestIdx)> {
+        self.arena.dfs_base(*fidx)
+            .map(|(ttype, nidx)| (ttype, ForestIdx::from(nidx)))
     }
 
     #[inline(always)]
@@ -535,7 +553,7 @@ where
         let mut map = HashMap::new();
         for (&sroot, &oroot) in sroots.iter().zip(oroots.iter()) {
             // map.insert(sroot, oroot);
-            for (sidx, oidx) in self.dfs(sroot).zip(other.dfs(oroot)) {
+            for (sidx, oidx) in self.dfs_pre(sroot).zip(other.dfs_pre(oroot)) {
                 map.insert(sidx, oidx);
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
@@ -587,7 +605,7 @@ where
         let mut map = HashMap::new();
         for (&sroot, &oroot) in sroots.iter().zip(oroots.iter()) {
             // map.insert(sroot, oroot);
-            for (sidx, oidx) in self.dfs(sroot).zip(other.dfs(oroot)) {
+            for (sidx, oidx) in self.dfs_pre(sroot).zip(other.dfs_pre(oroot)) {
                 map.insert(sidx, oidx);
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
@@ -635,7 +653,7 @@ where
         let mut map = HashMap::new();
         for (&sroot, &oroot) in sroots.iter().zip(oroots.iter()) {
             // map.insert(sroot, oroot);
-            for (sidx, oidx) in self.dfs(sroot).zip(other.dfs(oroot)) {
+            for (sidx, oidx) in self.dfs_pre(sroot).zip(other.dfs_pre(oroot)) {
                 map.insert(sidx, oidx);
                 let (snode, onode) = (&self[sidx], &other[oidx]);
                 match (&*snode.parents, &*onode.parents) {
@@ -672,7 +690,7 @@ where
         //       - D is the maximum depth of `self`
         //       - N is the number of nodes in `self`
         for root_idx in self.roots() {
-            for node_idx in self.dfs(root_idx) {
+            for node_idx in self.dfs_pre(root_idx) {
                 for _ in self.ancestors_of(node_idx) {
                     write!(f, "| ")?; // no newline
                 }
@@ -1036,7 +1054,7 @@ mod tests {
     }
 
     #[test]
-    fn bfs_traversal() -> Result<()> {
+    fn bfs_traversal_basic() -> Result<()> {
         let data = make_data()?;
         let bfs_order0: Vec<_> = data.forest.bfs(data.roots[0]).collect();
         assert_eq!(bfs_order0, data.bfs_order0);
@@ -1046,11 +1064,11 @@ mod tests {
     }
 
     #[test]
-    fn dfs_traversal() -> Result<()> {
+    fn dfs_traversal_basic() -> Result<()> {
         let data = make_data()?;
-        let dfs_order0: Vec<_> = data.forest.dfs(data.roots[0]).collect();
+        let dfs_order0: Vec<_> = data.forest.dfs_pre(data.roots[0]).collect();
         assert_eq!(dfs_order0, data.dfs_order0);
-        let dfs_order1: Vec<_> = data.forest.dfs(data.roots[1]).collect();
+        let dfs_order1: Vec<_> = data.forest.dfs_pre(data.roots[1]).collect();
         assert_eq!(dfs_order1, data.dfs_order1);
         Ok(())
     }
@@ -1109,9 +1127,13 @@ mod tests {
         let mut data = make_data()?;
         let node0 = ForestIdx::from(1);
         data.forest.rm_subtree(node0, false)?;
-        let subtree_bfs_order: Vec<_> = data.forest.bfs(data.roots[0]).collect();
+        let subtree_bfs_order: Vec<_> = data.forest
+            .bfs(data.roots[0])
+            .collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
-        let subtree_dfs_order: Vec<_> = data.forest.dfs(data.roots[0]).collect();
+        let subtree_dfs_order: Vec<_> = data.forest
+            .dfs_pre(data.roots[0])
+            .collect();
         assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
         Ok(())
     }
@@ -1135,7 +1157,9 @@ mod tests {
         let subtree_bfs_order: Vec<_> = data.forest.bfs(data.roots[0]).collect();
         assert_eq!(subtree_bfs_order, data.subtree_bfs_order);
 
-        let subtree_dfs_order: Vec<_> = data.forest.dfs(data.roots[0]).collect();
+        let subtree_dfs_order: Vec<_> = data.forest
+            .dfs_pre(data.roots[0])
+            .collect();
         assert_eq!(subtree_dfs_order, data.subtree_dfs_order);
         Ok(())
     }
@@ -1332,6 +1356,127 @@ mod tests {
             &[ForestIdx::from(7), ForestIdx::from(8), ForestIdx::from(9)]
         );
         Ok(())
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn dfs_base() {
+        use crate::*;
+        struct Data { name: String }
+
+        let mut forest: Forest<Data, (), ()> = Forest::default();
+        let node_A_idx = forest.push_root(Data { name: "A".into() });
+        let node_B_idx = forest.add_node(Data { name: "B".into() });
+        let node_C_idx = forest.add_node(Data { name: "C".into() });
+        let node_D_idx = forest.add_node(Data { name: "D".into() });
+        let node_E_idx = forest.add_node(Data { name: "E".into() });
+        let node_F_idx = forest.add_node(Data { name: "F".into() });
+        forest.add_edge((node_A_idx, node_B_idx), (), ());
+        forest.add_edge((node_A_idx, node_E_idx), (), ());
+        forest.add_edge((node_B_idx, node_C_idx), (), ());
+        forest.add_edge((node_B_idx, node_D_idx), (), ());
+        forest.add_edge((node_E_idx, node_B_idx), (), ());
+        forest.add_edge((node_E_idx, node_F_idx), (), ());
+
+        let dfs_base: Vec<(ForestIdx, _, _)> = forest.dfs_base(node_A_idx)
+            .map(|(ttype, fidx)| (fidx, ttype, forest[fidx].data.name.clone()))
+            .collect();
+        assert_eq!(&*dfs_base, &[
+            (ForestIdx::from(0), TraversalType::Pre,          "A".to_string()),
+            (ForestIdx::from(1), TraversalType::Pre,          "B".to_string()),
+            (ForestIdx::from(2), TraversalType::Pre,          "C".to_string()),
+            (ForestIdx::from(2), TraversalType::Post,         "C".to_string()),
+            (ForestIdx::from(1), TraversalType::Interspersed, "B".to_string()),
+            (ForestIdx::from(3), TraversalType::Pre,          "D".to_string()),
+            (ForestIdx::from(3), TraversalType::Post,         "D".to_string()),
+            (ForestIdx::from(1), TraversalType::Post,         "B".to_string()),
+            (ForestIdx::from(0), TraversalType::Interspersed, "A".to_string()),
+            (ForestIdx::from(4), TraversalType::Pre,          "E".to_string()),
+            (ForestIdx::from(1), TraversalType::Pre,          "B".to_string()),
+            (ForestIdx::from(2), TraversalType::Pre,          "C".to_string()),
+            (ForestIdx::from(2), TraversalType::Post,         "C".to_string()),
+            (ForestIdx::from(1), TraversalType::Interspersed, "B".to_string()),
+            (ForestIdx::from(3), TraversalType::Pre,          "D".to_string()),
+            (ForestIdx::from(3), TraversalType::Post,         "D".to_string()),
+            (ForestIdx::from(1), TraversalType::Post,         "B".to_string()),
+            (ForestIdx::from(4), TraversalType::Interspersed, "E".to_string()),
+            (ForestIdx::from(5), TraversalType::Pre,          "F".to_string()),
+            (ForestIdx::from(5), TraversalType::Post,         "F".to_string()),
+            (ForestIdx::from(4), TraversalType::Post,         "E".to_string()),
+            (ForestIdx::from(0), TraversalType::Post,         "A".to_string()),
+        ]);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn dfs_pre() {
+        use crate::*;
+        struct Data { name: String }
+
+        let mut forest: Forest<Data, (), ()> = Forest::default();
+        let node_A_idx = forest.push_root(Data { name: "A".into() });
+        let node_B_idx = forest.add_node(Data { name: "B".into() });
+        let node_C_idx = forest.add_node(Data { name: "C".into() });
+        let node_D_idx = forest.add_node(Data { name: "D".into() });
+        let node_E_idx = forest.add_node(Data { name: "E".into() });
+        let node_F_idx = forest.add_node(Data { name: "F".into() });
+        forest.add_edge((node_A_idx, node_B_idx), (), ());
+        forest.add_edge((node_A_idx, node_E_idx), (), ());
+        forest.add_edge((node_B_idx, node_C_idx), (), ());
+        forest.add_edge((node_B_idx, node_D_idx), (), ());
+        forest.add_edge((node_E_idx, node_B_idx), (), ());
+        forest.add_edge((node_E_idx, node_F_idx), (), ());
+
+        let dfs_pre: Vec<(ForestIdx, _)> = forest.dfs_pre(node_A_idx)
+            .map(|fidx| (fidx, forest[fidx].data.name.to_string()))
+            .collect();
+        assert_eq!(&*dfs_pre, &[
+            (ForestIdx::from(0), "A".to_string()),
+            (ForestIdx::from(1), "B".to_string()),
+            (ForestIdx::from(2), "C".to_string()),
+            (ForestIdx::from(3), "D".to_string()),
+            (ForestIdx::from(4), "E".to_string()),
+            (ForestIdx::from(1), "B".to_string()),
+            (ForestIdx::from(2), "C".to_string()),
+            (ForestIdx::from(3), "D".to_string()),
+            (ForestIdx::from(5), "F".to_string()),
+        ]);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn dfs_post() {
+        use crate::*;
+        struct Data { name: String }
+
+        let mut forest: Forest<Data, (), ()> = Forest::default();
+        let node_A_idx = forest.push_root(Data { name: "A".into() });
+        let node_B_idx = forest.add_node(Data { name: "B".into() });
+        let node_C_idx = forest.add_node(Data { name: "C".into() });
+        let node_D_idx = forest.add_node(Data { name: "D".into() });
+        let node_E_idx = forest.add_node(Data { name: "E".into() });
+        let node_F_idx = forest.add_node(Data { name: "F".into() });
+        forest.add_edge((node_A_idx, node_B_idx), (), ());
+        forest.add_edge((node_A_idx, node_E_idx), (), ());
+        forest.add_edge((node_B_idx, node_C_idx), (), ());
+        forest.add_edge((node_B_idx, node_D_idx), (), ());
+        forest.add_edge((node_E_idx, node_B_idx), (), ());
+        forest.add_edge((node_E_idx, node_F_idx), (), ());
+
+        let dfs_post: Vec<(ForestIdx, _)> = forest.dfs_post(node_A_idx)
+            .map(|fidx| (fidx, forest[fidx].data.name.to_string()))
+            .collect();
+        assert_eq!(&*dfs_post, &[
+            (ForestIdx::from(2), "C".to_string()),
+            (ForestIdx::from(3), "D".to_string()),
+            (ForestIdx::from(1), "B".to_string()),
+            (ForestIdx::from(2), "C".to_string()),
+            (ForestIdx::from(3), "D".to_string()),
+            (ForestIdx::from(1), "B".to_string()),
+            (ForestIdx::from(5), "F".to_string()),
+            (ForestIdx::from(4), "E".to_string()),
+            (ForestIdx::from(0), "A".to_string()),
+        ]);
     }
 
 }
