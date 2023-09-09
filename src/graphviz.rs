@@ -349,6 +349,7 @@ pub enum DotStyle {
 mod tests {
     use super::*;
 
+    #[allow(unused)]
     fn make_graph() -> DotGraph {
         DotGraph {
             stmts: vec![
