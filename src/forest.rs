@@ -423,9 +423,8 @@ impl<D, P, C> Forest<D, P, C> {
         self.arena.dfs_post(*fidx).map(ForestIdx)
     }
 
-    #[allow(unused)] // Intentionally not publicly exposed, for now
     #[inline(always)]
-    pub(crate) fn dfs_base(
+    pub fn dfs_base(
         &self,
         fidx: ForestIdx,
     ) -> impl DoubleEndedIterator<Item = (TraversalType, ForestIdx)> {
