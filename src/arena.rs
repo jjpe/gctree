@@ -98,7 +98,7 @@ impl<D, P, C> Arena<D, P, C> {
         if node_idx.0 >= self.nodes.len() {
             return Err(Error::NodeNotFound(node_idx));
         }
-        for idx in self.dfs(node_idx).rev(/* leaves -> ... -> node_idx */) {
+        for idx in self.dfs_before(node_idx).rev(/* leaves -> ... -> node_idx */) {
             // NOTE: Don't reset the `idx` field of `self[node_idx]`, since
             //       `Node<_>` identity persists between allocations.
             debug_assert!(self[idx].is_leaf_node());
@@ -122,7 +122,7 @@ impl<D, P, C> Arena<D, P, C> {
         if node_idx.0 >= self.nodes.len() {
             return Err(Error::NodeNotFound(node_idx));
         }
-        for idx in self.dfs(node_idx) {
+        for idx in self.dfs_before(node_idx) {
             if self[idx].has_parents() { continue }
             self.rm_edges([idx], self[idx].child_idxs().collect::<Vec<_>>())?;
             // NOTE: Don't clear the  data field of `self[node_idx]`, for perf
@@ -278,7 +278,7 @@ impl<D, P, C> Arena<D, P, C> {
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.dfs(node_idx)
+        self.dfs_before(node_idx)
     }
 
     #[inline(always)]
@@ -286,45 +286,32 @@ impl<D, P, C> Arena<D, P, C> {
         &self,
         node_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> + '_ {
-        self.dfs(node_idx)
+        self.dfs_before(node_idx)
             .filter(move |&didx| didx != node_idx)
     }
 
-    pub fn dfs(
+    pub fn dfs_before(
         &self,
         start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        let mut output = Vec::with_capacity(self.nodes.len());
-        let mut stack = vec![start_idx];
-        while let Some(node_idx) = stack.pop() {
-            output.push(node_idx);
-            stack.extend(self[node_idx].child_idxs().rev());
-        }
-        output.into_iter()
+        self.dfs_full(start_idx)
+            .filter(|&(_, phase)| phase == Phase::Before)
+            .map(|(nidx, _)| nidx)
     }
 
-    pub fn dfs_pre(
+    pub fn dfs_after(
         &self,
         start_idx: NodeIdx,
     ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        self.dfs_base(start_idx)
-            .filter(|&(ttype, _)| ttype == TraversalType::Pre)
-            .map(|(_, nidx)| nidx)
+        self.dfs_full(start_idx)
+            .filter(|&(_, phase)| phase == Phase::After)
+            .map(|(nidx, _)| nidx)
     }
 
-    pub fn dfs_post(
+    pub fn dfs_full(
         &self,
         start_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = NodeIdx> {
-        self.dfs_base(start_idx)
-            .filter(|&(ttype, _)| ttype == TraversalType::Post)
-            .map(|(_, nidx)| nidx)
-    }
-
-    pub fn dfs_base(
-        &self,
-        start_idx: NodeIdx,
-    ) -> impl DoubleEndedIterator<Item = (TraversalType, NodeIdx)> {
+    ) -> impl DoubleEndedIterator<Item = (NodeIdx, Phase)> {
         struct Entry {
             nidx: NodeIdx,
             /// The number of children of `nidx` visited so far
@@ -337,25 +324,24 @@ impl<D, P, C> Arena<D, P, C> {
         });
         let mut output = vec![];
         while let Some(current) = stack.last_mut() {
-            let current_child = current.visited;
+            let child = current.visited; // ordinal number
             let node = &self[current.nidx];
-            let num_children = node.count_children();
-            let is_pre = current_child == 0;
-            let is_post = current_child == num_children;
-            if is_pre {
-                output.push((TraversalType::Pre,  current.nidx));
+            let is_before = child == 0;
+            let is_after  = child == node.count_children();
+            if is_before {
+                output.push((current.nidx, Phase::Before));
             }
-            if is_post {
-                output.push((TraversalType::Post, current.nidx));
+            if is_after {
+                output.push((current.nidx, Phase::After));
                 stack.pop().unwrap();
                 continue
             }
-            if !is_pre && !is_post {
-                output.push((TraversalType::Interspersed,  current.nidx));
+            if !is_before && !is_after {
+                output.push((current.nidx, Phase::Between(child - 1, child)));
             }
             current.visited += 1;
             stack.push(Entry {
-                nidx: node.children[current_child].0,
+                nidx: node.children[child].0,
                 visited: 0,
             });
         }
@@ -540,8 +526,10 @@ where
                     }
                 }
                 Ok(Arena {
-                    nodes: nodes.ok_or_else(|| de::Error::missing_field("nodes"))?,
-                    garbage: garbage.ok_or_else(|| de::Error::missing_field("garbage"))?,
+                    nodes: nodes
+                        .ok_or_else(|| de::Error::missing_field("nodes"))?,
+                    garbage: garbage
+                        .ok_or_else(|| de::Error::missing_field("garbage"))?,
                 })
             }
         }
@@ -556,12 +544,21 @@ where
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(displaydoc::Display)]
-pub enum TraversalType {
-    /// pre
-    Pre,
-    /// interspersed
-    Interspersed,
-    /// post
-    Post,
+pub enum Phase {
+    /// Before visiting a node
+    Before,
+    /// While visiting a node, between visiting child {0} and {1}
+    Between(usize, usize),
+    /// After visiting a node
+    After,
+}
+
+impl std::fmt::Display for Phase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Before => write!(f, "before"),
+            Self::Between(prev, next) => write!(f, "between {prev} & {next}"),
+            Self::After => write!(f, "after"),
+        }
+    }
 }
