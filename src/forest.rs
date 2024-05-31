@@ -363,8 +363,8 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     #[inline]
-    pub fn parent_of(&self, node_idx: ForestIdx) -> Option<ForestIdx> {
-        self[node_idx].parents.get(0).map(|(pidx, _pdata)| ForestIdx(*pidx))
+    pub fn parent_of(&self, fidx: ForestIdx) -> Option<ForestIdx> {
+        self[fidx].parents.get(0).map(|(pidx, _pdata)| ForestIdx(*pidx))
     }
 
     #[inline(always)]
