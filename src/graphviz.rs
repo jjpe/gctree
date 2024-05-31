@@ -30,7 +30,7 @@ impl Default for DotGraph {
 }
 
 impl DotGraph {
-    const DEFAULT_BGCOLOR: &str = "#3c3c3c"; // dark gray
+    const DEFAULT_BGCOLOR: &'static str = "#3c3c3c"; // dark gray
 
     pub fn new() -> Self {
         Self {
@@ -49,7 +49,7 @@ impl DotGraph {
         let dot = &format!("{self}");
         let g: Graph = parse(dot).map_err(Error::GraphvizParse)?;
         let mut pctx = PrinterContext::default();
-        let svg: String = exec(g, &mut pctx, vec![Format::Svg.into()])?;
+        let svg = exec(g, &mut pctx, vec![Format::Svg.into()])?;
         let svg_filepath = dirpath.join(format!("{stem}.svg"));
         std::fs::write(&svg_filepath, svg)?;
         Ok(())
