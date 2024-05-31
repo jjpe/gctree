@@ -6,6 +6,7 @@ description = "A library for cache-friendly, graph-like, arena-allocated datastr
 license = "MIT"
 documentation = "https://docs.rs/gctree"
 repository = "https://github.com/jjpe/gctree"
+rust-version = "1.68.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
