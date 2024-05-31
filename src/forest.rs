@@ -111,6 +111,11 @@ impl<D, P, C> Forest<D, P, C> {
         self.roots.iter().copied()
     }
 
+    pub fn root(&self) -> ForestIdx {
+        assert_eq!(self.roots.len(), 1, "Expected exactly 1 root node");
+        self.roots[0]
+    }
+
     pub fn add_garbage(&mut self, fidx: ForestIdx) {
         self.arena.add_garbage(fidx.0);
     }
@@ -134,11 +139,11 @@ impl<D, P, C> Forest<D, P, C> {
         self.roots = roots;
     }
 
-    pub fn root(&mut self, fidx: ForestIdx) {
+    pub fn register_root(&mut self, fidx: ForestIdx) {
         self.roots.push(fidx);
     }
 
-    pub fn unroot(&mut self, fidx: ForestIdx) {
+    pub fn unregister_root(&mut self, fidx: ForestIdx) {
         if let Some(pos) = self.roots.iter().position(|&r| r == fidx) {
             self.roots.remove(pos);
         }
@@ -321,14 +326,14 @@ impl<D, P, C> Forest<D, P, C> {
             for &pidx in &parent_idxs {
                 self.rm_edge(pidx, nidx)?;
             }
-            self.unroot(nidx);
+            self.unregister_root(nidx);
             self.arena.add_garbage(*nidx);
             let child_idxs = self[nidx].child_idxs()
                 .map(ForestIdx::from)
                 .collect::<Vec<_>>(/*avoid borrowck*/);
             for &cidx in &child_idxs {
                 self.rm_edge(nidx, cidx)?;
-                self.root(cidx);
+                self.register_root(cidx);
             }
         }
         Ok(())
@@ -365,6 +370,18 @@ impl<D, P, C> Forest<D, P, C> {
     #[inline]
     pub fn parent_of(&self, fidx: ForestIdx) -> Option<ForestIdx> {
         self[fidx].parents.get(0).map(|(pidx, _pdata)| ForestIdx(*pidx))
+    }
+
+    pub fn child_of(
+        &mut self,
+        fidx: ForestIdx,
+        ordinal: usize,
+    ) -> Option<ForestIdx> {
+        if ordinal < self[fidx].count_children() {
+            Some(ForestIdx::from(self[fidx].children[ordinal].0))
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
