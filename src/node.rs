@@ -113,6 +113,36 @@ impl<D, P, C> Node<D, P, C> {
         self.children.iter().map(|(idx, _)| *idx)
     }
 
+    #[inline]
+    pub fn first_child_idx(&self) -> Option<NodeIdx> {
+        let child_count = self.children.len();
+        if child_count == 0 {
+            None
+        } else {
+            unsafe { Some(self.children.get_unchecked(0).0) }
+        }
+    }
+
+    #[inline]
+    pub fn last_child_idx(&self) -> Option<NodeIdx> {
+        let child_count = self.children.len();
+        if child_count == 0 {
+            None
+        } else {
+            self.nth_child_idx(child_count - 1)
+        }
+    }
+
+    #[inline]
+    pub fn nth_child_idx(&self, n: usize) -> Option<NodeIdx> {
+        let child_count = self.children.len();
+        if n < child_count {
+            unsafe { Some(self.children.get_unchecked(n).0) }
+        } else {
+            None
+        }
+    }
+
     #[inline(always)]
     pub fn child_edges(
         &self
