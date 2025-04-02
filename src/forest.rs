@@ -373,7 +373,7 @@ impl<D, P, C> Forest<D, P, C> {
     }
 
     pub fn child_of(
-        &mut self,
+        &self,
         fidx: ForestIdx,
         ordinal: usize,
     ) -> Option<ForestIdx> {
