@@ -1,6 +1,6 @@
 [package]
 name = "gctree"
-version = "0.31.0"
+version = "0.32.0"
 edition = "2021" # TODO: update to edition 2024
 description = "A library for cache-friendly, graph-like, arena-allocated datastructures."
 license = "MIT"
