@@ -7,18 +7,8 @@ use crate::{
 };
 use std::collections::VecDeque;
 
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
 /// A stack path through a `Gss`, starting at a top-of-stack.
 pub struct StackPath(VecDeque<StackIdx>);
 
@@ -349,18 +339,8 @@ impl<N, E> std::ops::IndexMut<StackIdx> for Gss<N, E> {
 
 
 
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::From,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize, derive_more::From)]
 pub struct StackIdx(NodeIdx);
 
 impl StackIdx {
@@ -395,20 +375,9 @@ impl std::ops::Deref for StackIdx {
 
 
 
-
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    displaydoc::Display,
-    thiserror::Error,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(displaydoc::Display, thiserror::Error)]
 pub enum Error {
     /// Node {0} is not a top-of-stack
     ExpectedTop(NodeIdx)

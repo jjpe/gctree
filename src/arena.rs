@@ -455,21 +455,14 @@ where
     fn deserialize<DE: Deserializer<'de>>(
         d: DE
     ) -> std::result::Result<Self, DE::Error> {
-        #[derive(serde_derive::Deserialize)]
+        #[derive(serde::Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
             Nodes,
             Garbage,
         }
 
-        #[rustfmt::skip]
-        #[derive(
-            Clone,
-            Debug,
-            PartialEq,
-            serde_derive::Deserialize,
-            serde_derive::Serialize
-        )]
+        #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
         struct ArenaVisitor<D, P, C>(
             std::marker::PhantomData<D>,
             std::marker::PhantomData<P>,

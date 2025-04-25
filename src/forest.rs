@@ -753,7 +753,7 @@ where
     fn deserialize<DE: Deserializer<'de>>(
         d: DE
     ) -> std::result::Result<Self, DE::Error> {
-        #[derive(serde_derive::Deserialize)]
+        #[derive(serde::Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
             Arena,
@@ -833,18 +833,8 @@ where
 
 
 
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::From,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize, derive_more::From)]
 pub struct ForestIdx(NodeIdx);
 
 impl std::fmt::Debug for ForestIdx {

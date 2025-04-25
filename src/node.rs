@@ -2,20 +2,9 @@
 
 use crate::error::{Error, Result};
 
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::Deref,
-    derive_more::DerefMut,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(derive_more::Deref, derive_more::DerefMut)]
 pub struct Node<D, P, C> {
     pub idx: NodeIdx,
     pub parents: Vec<(NodeIdx, P)>,
@@ -230,20 +219,9 @@ impl<D, P, C> Node<D, P, C> {
 
 
 
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::Deref,
-    derive_more::From
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(derive_more::Deref, derive_more::From)]
 pub struct NodeIdx(pub(crate) usize);
 
 impl std::fmt::Debug for NodeIdx {
@@ -260,20 +238,9 @@ impl std::fmt::Display for NodeIdx {
 
 
 
-#[rustfmt::skip]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    derive_more::Deref,
-    derive_more::From,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(derive_more::Deref, derive_more::From)]
 pub struct NodeCount(usize);
 
 impl NodeCount {

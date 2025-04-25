@@ -4,19 +4,9 @@ use crate::node::NodeIdx;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    displaydoc::Display,
-    thiserror::Error,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(displaydoc::Display, thiserror::Error)]
 pub enum Error {
     /// I/O error: {0}
     Io(ioe::IoError),
