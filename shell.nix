@@ -9,7 +9,7 @@ pkgs.mkShell {
     cargo-edit
     cargo-crev  # Review system for verifying security & quality of Cargo deps
     cargo-criterion  # Benchmarker
-    # cargo-expand  # Rust macro expansion utility   TODO broken for now
+    cargo-expand  # Rust macro expansion utility
     cargo-nextest  # A new, faster test runner for Rust.
     cargo-outdated  # Check for outdated dependencies
     # cargo-make  # build tool on top of cargo
@@ -17,10 +17,7 @@ pkgs.mkShell {
     # cargo-ndk  # Android build support for Rust
     cargo-watch  # Execute commands when Rust project files change
     cargo-workspaces  # Optimizes the workflow around cargo workspaces
-    # clang
-    # jetbrains.rust-rover  # Quite large, but useful for its debugger GUI
-    openssl
-    pkg-config
+    tokei
     (rust-bin.stable.latest.default.override {
       extensions = [
         "rustfmt"
@@ -34,8 +31,6 @@ pkgs.mkShell {
         "wasm32-unknown-unknown"
       ];
     })
-    trunk  # Build, bundle & ship your Rust WASM app to the web
-    wasm-pack  # A tool to make WASM & Rust play nicely
   ];
 
   shellHook = ''
