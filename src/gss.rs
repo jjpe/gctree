@@ -2,7 +2,7 @@
 
 use crate::{
     arena::Arena,
-    error::Result,
+    error::{Error, Result},
     node::{Edge, Node, NodeIdx}, NodeCount,
 };
 use std::collections::VecDeque;
@@ -307,7 +307,7 @@ impl<N, E> Gss<N, E> {
         if self.tops.contains(&node) && !self[node].has_children() {
             Ok(())
         } else {
-            Err(Error::ExpectedTop(*node))?
+            Err(Error::ExpectedGssTop(*node))?
         }
     }
 
@@ -371,14 +371,4 @@ impl std::ops::Deref for StackIdx {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(displaydoc::Display, thiserror::Error)]
-pub enum Error {
-    /// Node {0} is not a top-of-stack
-    ExpectedTop(NodeIdx)
 }

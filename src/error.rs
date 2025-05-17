@@ -13,9 +13,6 @@ pub enum Error {
     /// GraphViz generation error: {0}
     GraphvizParse(String),
 
-    /// An error originating in a Gss instance: {0:?}
-    GssError(#[from] crate::gss::Error),
-
     /// Detected a cycle: {path:?}
     CycleDetected { path: Vec<NodeIdx> },
     /// Expected Node {0} to be a branch node
@@ -30,7 +27,10 @@ pub enum Error {
     /// Expected `tree[node_idx]` to have `tree[child_idx]` as a child node
     ChildNotFound { node_idx: NodeIdx, child_idx: NodeIdx },
     /// No node found with NodeIdx `{0}`
-    NodeNotFound(NodeIdx)
+    NodeNotFound(NodeIdx),
+
+    /// Node {0} is not a top-of-gss
+    ExpectedGssTop(NodeIdx),
 }
 
 impl From<std::io::Error> for Error {
