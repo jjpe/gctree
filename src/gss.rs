@@ -168,7 +168,7 @@ impl<N, E> Gss<N, E> {
     /// 2. Start at a given `top`
     ///
     /// That is, all `StackPath`s yielded by the iterator contain
-    /// `length + 1` `StackIdx`s and `length` edges between them.
+    /// `length + 1` `StackIdx`s and `len`gth edges between them.
     /// Each path is top-inclusive i.e. it contains the `top`.
     /// For example, if `self` looks like follows:
     /// ``` text
@@ -177,7 +177,7 @@ impl<N, E> Gss<N, E> {
     ///       \  \--5--/  /
     ///        \---------/
     /// ```
-    /// If then `self.stacks(StackIdx(7), 3)` is executed, the returned
+    /// If then `self.stack_paths(StackIdx(7), 3)` is executed, the returned
     /// iterator will iterate over the paths `stackpath![7, 6, 4, 3]`,
     /// `stackpath![7, 6, 5, 3]` and `stackpath![7, 2, 1, 0]`.
     pub fn stack_paths(
