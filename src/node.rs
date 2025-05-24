@@ -35,6 +35,21 @@ impl<D, P, C> Node<D, P, C> {
     }
 
     #[inline(always)]
+    /// Assuming `self` has exactly one parent node, return it.
+    /// Return an error if the assumption is violated.
+    pub fn parent_idx(&self) -> Result<NodeIdx> {
+        let parent_count = self.parents.len();
+        if parent_count == 1 {
+            Ok(self.parent_idxs().nth(0).unwrap())
+        } else {
+            return Err(Error::ExpectedSingleParent {
+                fidx: idx,
+                got: parent_count,
+            });
+        }
+    }
+
+    #[inline(always)]
     pub fn parent_edges(
         &self
     ) -> impl DoubleEndedIterator<Item = Edge<NodeIdx, &P>> + '_ {

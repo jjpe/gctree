@@ -29,6 +29,9 @@ pub enum Error {
     /// No node found with NodeIdx `{0}`
     NodeNotFound(NodeIdx),
 
+    /// Expected a single parent node, but got {got} parents
+    ExpectedSingleParent { fidx: NodeIdx, got: usize },
+
     /// Node {0} is not a top-of-gss
     ExpectedGssTop(NodeIdx),
 }
