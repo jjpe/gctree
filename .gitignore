@@ -1,4 +1,4 @@
 target/
-.direnv
+.direnv/
 .emacs.desktop*
 .DS_Store
