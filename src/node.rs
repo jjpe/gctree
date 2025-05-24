@@ -43,7 +43,7 @@ impl<D, P, C> Node<D, P, C> {
             Ok(self.parent_idxs().nth(0).unwrap())
         } else {
             return Err(Error::ExpectedSingleParent {
-                fidx: idx,
+                fidx: self.idx,
                 got: parent_count,
             });
         }
