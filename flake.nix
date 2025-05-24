@@ -1,5 +1,5 @@
 {
-  description = "A dev shell for the omni workspace";
+  description = "A dev shell for the gctree library";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
